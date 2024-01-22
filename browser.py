@@ -37,6 +37,7 @@ class URL:
             self.port = 443
 
     def request(self):
+        #sending a request to the server
         s = socket.socket(
             family=socket.AF_INET,
             type=socket.SOCK_STREAM,
@@ -47,9 +48,16 @@ class URL:
             s = ctx.wrap_socket(s, server_hostname=self.host)
 
         s.connect((self.host, self.port))
+        
         s.send(("GET {} HTTP/1.0\r\n".format(self.path) + \
                 "Host: {}\r\n\r\n".format(self.host)) \
                 .encode("utf8"))
+        '''
+        s.send(("GET {} HTTP/1.0\r\n".format(self.path) + \
+                "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
+                .encode("utf8"))
+        '''
+        #Reading the response form the server
         response = s.makefile("r", encoding="utf8", newline="\r\n")
         statusline = response.readline()
         version, status, explanation = statusline.split(" ", 2)
@@ -61,11 +69,18 @@ class URL:
             #Next will come the headers
             header, value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
-
+        
+        
         #Ensure that non of the data is being sent in an unusual way
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
+        encoding_response = response_headers.get("content-type", "utf8")
+        encoding_position = encoding_response.find("charset=")
+        print('encoding_response: ', encoding_response, ' encoding_position: ', encoding_position )
+        
+        encoding = encoding_response[encoding_position + 8:] if encoding_position != -1 else "utf8"
 
+        print('encoding: ', encoding)
         body = response.read() 
         s.close()
         return body
