@@ -26,15 +26,15 @@ class URL:
     """
     This class is used to parse the url and request the data from the server
     """
-    def format_headers( headers):
+    def format_headers(self, headers):
         """Format the given header dictionary into a string.
         """
-        base_headers = "GET {} HTTP/1.1\r\n".format(self.path) + \
-                    "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb".format(self.host)) \
-                    .encode("utf8"))
-
         headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
-        return base_headers + headers_text.encode("utf8") + b"\r\n\r\n" #Byte string is a little sus?
+        base_headers = ("GET {} HTTP/1.1\r\n".format(self.path) + \
+                    "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb".format(self.host) + \
+                    headers_text + "\r\n\r\n").encode("utf8")
+                       
+        return base_headers
 
 
     def __init__(self, url):
