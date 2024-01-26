@@ -1,4 +1,5 @@
 import socket, ssl
+from typing import Optional, Dict
 
 
 def show(body):
@@ -14,12 +15,19 @@ def show(body):
             print(c, end="")
 
 
-def load(url):
+def load(url, view_source: Optional[bool] = False):
     """Load the given URL and convert text tags to character tags.
     """
-    body = url.request()
-    body = body.replace("&lt;", "<").replace("&gt;", ">")
-    show(body)
+    '''
+    # Note: Test for testing extra headers
+    extra_client_headers = {"User-Agent" : "d"}
+    body = url.request(headers=extra_client_headers)
+    '''
+    body = url.request().replace("&lt;", "<").replace("&gt;", ">")
+    if view_source:
+        print(body)
+    else:
+        show(body)
 
 
 class URL:
@@ -29,11 +37,27 @@ class URL:
     def format_headers(self, headers):
         """Format the given header dictionary into a string.
         """
+        user_agent_found, connection_found = False, False
+        user_agent = "\r\nUser-Agent: SquidWeb"
+        connection = "\r\nConnection: close"
         headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
+        remove_list = []
+        for key in headers.keys():
+            if key.lower() == "user-agent":
+                user_agent = "\r\nUser-Agent: " + headers[key]
+                remove_list.append(key)
+            if key.lower() == "connection":
+                connection = "\r\n" + key + ": " + headers[key]
+                remove_list.append(key)
+        # remove the headers that are already in the default headers
+        for key in remove_list:
+            del headers[key]
+        headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
+        headers_text += connection + user_agent
         base_headers = ("GET {} HTTP/1.1\r\n".format(self.path) + \
-                    "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb".format(self.host) + \
+                    "Host: {}\r\n".format(self.host) + \
                     headers_text + "\r\n\r\n").encode("utf8")
-                       
+#        print("header: ", headers_text)
         return base_headers
 
 
@@ -68,10 +92,10 @@ class URL:
             self.port = None
             print("self.scheme: ", self.scheme, "url: ", url)
 
-    def request(self, headers=None):
+    def request(self, headers: Optional[Dict[str, str]] = None):
         """Handles getting the page source from the server or local file.
         """
-        
+
         # Check for local file first'
         if self.scheme == "file":
             print('file scheme found')
@@ -90,12 +114,15 @@ class URL:
             if self.scheme == "https":
                 ctx = ssl.create_default_context()
                 s = ctx.wrap_socket(s, server_hostname=self.host)
-
             s.connect((self.host, self.port))
 
-            s.send(("GET {} HTTP/1.1\r\n".format(self.path) + \
-                    "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
-                    .encode("utf8"))
+            #Handle the headers
+            my_headers =  ("GET {} HTTP/1.1\r\n".format(self.path) + \
+                           "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
+                           .encode("utf8")
+            if headers:
+                my_headers = self.format_headers(headers)
+            s.send(my_headers)
             
             #Reading the response form the server
             response = s.makefile("r", encoding="utf8", newline="\r\n")
@@ -130,6 +157,9 @@ class URL:
 
 if __name__ == "__main__":
     import sys
+#    load(URL(sys.argv[1]), True)
+
     load(URL(sys.argv[1]))
+
 
 
