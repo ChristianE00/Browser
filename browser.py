@@ -70,8 +70,9 @@ class URL:
             self.scheme, url = url.split("://", 1)
             if "/" in url:
                 self.host, url = url.split("/", 1)
-            else:
+            elif "file" not in self.scheme:
                 self.host = url
+                print("hit else-------------")
                 url = ""
             assert self.scheme in ["http", "https", "file"]
 
@@ -100,7 +101,8 @@ class URL:
 
         # Check for local file first'
         if self.scheme == "file":
-            print('file scheme found')
+            #print('file scheme found')
+#            print("PATH: ", self.path)
             with open(self.path, "r", encoding="utf8") as f:
                 return f.read()
         elif self.scheme == "data":
