@@ -18,11 +18,11 @@ def show(body):
 def load(url, view_source: Optional[bool] = False):
     """Load the given URL and convert text tags to character tags.
     """
-    '''
     # Note: Test for testing extra headers
-    extra_client_headers = {"User-Agent" : "d"}
+    ''' 
+    extra_client_headers = {"test1" : "hehe", "test2" : "hehe2", "User-Agent" : "d"}
     body = url.request(headers=extra_client_headers)
-    '''
+    ''' 
     body = url.request().replace("&lt;", "<").replace("&gt;", ">")
     if view_source:
         print(body)
@@ -38,32 +38,34 @@ class URL:
         """Format the given header dictionary into a string.
         """
         user_agent_found, connection_found = False, False
-        user_agent = "\r\nUser-Agent: SquidWeb"
-        connection = "\r\nConnection: close"
-        headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
+        user_agent = "User-Agent: SquidWeb\r\n"
+        connection = "Connection: close\r\n"
         remove_list = []
         for key in headers.keys():
             if key.lower() == "user-agent":
-                user_agent = "\r\nUser-Agent: " + headers[key]
+                user_agent = key + ": " + headers[key] + "\r\n"
                 remove_list.append(key)
             if key.lower() == "connection":
-                connection = "\r\n" + key + ": " + headers[key]
+                connection = key + ": " + headers[key] + "\r\n"
                 remove_list.append(key)
         # remove the headers that are already in the default headers
         for key in remove_list:
             del headers[key]
+
         headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
-        headers_text += connection + user_agent
+        headers_text = "\r\n" + user_agent + connection + headers_text
+      #  headers_text = "\r\n" + headers_text + connection
         base_headers = ("GET {} HTTP/1.1\r\n".format(self.path) + \
-                    "Host: {}\r\n".format(self.host) + \
+                    "Host: {}".format(self.host) + \
                     headers_text + "\r\n\r\n").encode("utf8")
-#        print("header: ", headers_text)
+   #     print("base_headers: ", base_headers)
         return base_headers
 
 
     def __init__(self, url):
         """Initiate the URL class with a scheme, host, port, and path.
         """
+        self.default_headers = {"User-Agent": "default/1.0"} 
         if "://" in url:
             self.scheme, url = url.split("://", 1)
             if "/" in url:
