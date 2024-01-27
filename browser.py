@@ -65,9 +65,14 @@ class URL:
     def __init__(self, url):
         """Initiate the URL class with a scheme, host, port, and path.
         """
+        self.visited_urls = set()
         self.default_headers = {"User-Agent": "default/1.0"} 
+        url = url.strip()
+#        print("url: ", url)
         if "://" in url:
             self.scheme, url = url.split("://", 1)
+            self.scheme = self.scheme.strip()
+#            print("self.scheme: ", self.scheme, "url: ", url)
             if "/" in url:
                 self.host, url = url.split("/", 1)
             elif "file" not in self.scheme:
@@ -93,7 +98,7 @@ class URL:
             self.path = url
             self.scheme, url = url.split(":", 1)
             self.port = None
-            print("self.scheme: ", self.scheme, "url: ", url)
+#            print("self.scheme: ", self.scheme, "url: ", url)
 
 
     def handle_redirect(self, response):
@@ -104,9 +109,16 @@ class URL:
             if line == "\r\n": break
             header, value = line.split(":", 1)
             if header.casefold() == "location":
-#                        print("redirecting to: ", value)
-                return URL(value).request()
+                if "://" not in value:
+                   # print("No Scheme", value, "self.scheme: ", self.scheme, "self.host: ", self.host)
+                    value = self.scheme.strip() + "://" + self.host.strip() + value.strip()
+                if value in self.visited_urls:
+                    return "Error: Redirect loop detected"
+                self.visited_urls.add(value.strip())
+               # print("redirecting to: ", value)
+                return URL(value).request(None, self.visited_urls)
         return "Error: Redirect without location header"
+
 
 
     def handle_local_file(self):
@@ -132,9 +144,12 @@ class URL:
 
 
     def send_request(self, s, headers):
+#        print("entered send_request")
         my_headers =  ("GET {} HTTP/1.1\r\n".format(self.path) + \
                        "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
                        .encode("utf8")
+#        print("my_headers: ", my_headers)
+#        print("headers: ", headers)
         if headers:
             my_headers = self.format_headers(headers)
         s.send(my_headers)
@@ -157,7 +172,7 @@ class URL:
         return response_headers
 
 
-    def request(self, headers: Optional[Dict[str, str]] = None):
+    def request(self, headers: Optional[Dict[str, str]] = None, visited_urls=None):
         """Handles getting the page source from the server or local file.
         """
         if self.scheme == "file":
@@ -166,8 +181,19 @@ class URL:
             return self.handle_data_scheme()
         elif self.scheme == "https" or self.scheme == "http":
             s = self.create_socket()
+#            print("send request headers: ", headers)
             self.send_request(s, headers)
             response, status = self.read_response(s)
+            
+            # other request code
+            url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
+            if visited_urls is not None:
+                self.visited_urls = visited_urls
+#            if url in self.visited_urls: 
+#                return "first: Error: Redirect loop detected"
+            self.visited_urls.add(url)
+#            print("URL: ", url)
+
             if int(status) >= 300 and int(status) < 400: 
                 return self.handle_redirect(response)
             response_headers = self.read_headers(response)
