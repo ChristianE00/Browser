@@ -95,6 +95,19 @@ class URL:
             self.port = None
             print("self.scheme: ", self.scheme, "url: ", url)
 
+    def handle_redirect(self, response):
+        """Handles the redirect from the server
+        """
+        while True:
+            line = response.readline()
+            if line == "\r\n": break
+            header, value = line.split(":", 1)
+            if header.casefold() == "location":
+#                        print("redirecting to: ", value)
+                return URL(value).request()
+        return "Error: Redirect without location header"
+
+        
     def request(self, headers: Optional[Dict[str, str]] = None):
         """Handles getting the page source from the server or local file.
         """
@@ -133,6 +146,10 @@ class URL:
             statusline = response.readline()
             version, status, explanation = statusline.split(" ", 2)
             
+            # Redirect if needed
+            if int(status) >= 300 and int(status) < 400: 
+                return self.handle_redirect(response)
+
             response_headers = {}
             while True:
                 line = response.readline()
