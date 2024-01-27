@@ -95,6 +95,7 @@ class URL:
             self.port = None
             print("self.scheme: ", self.scheme, "url: ", url)
 
+
     def handle_redirect(self, response):
         """Handles the redirect from the server
         """
@@ -107,69 +108,77 @@ class URL:
                 return URL(value).request()
         return "Error: Redirect without location header"
 
-        
+
+    def handle_local_file(self):
+        with open(self.path, "r", encoding="utf8") as f:
+            return f.read()
+
+
+    def handle_data_scheme(self):
+        return self.path
+
+
+    def create_socket(self):
+        s = socket.socket(
+            family=socket.AF_INET,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+        if self.scheme == "https":
+            ctx = ssl.create_default_context()
+            s = ctx.wrap_socket(s, server_hostname=self.host)
+        s.connect((self.host, self.port))
+        return s
+
+
+    def send_request(self, s, headers):
+        my_headers =  ("GET {} HTTP/1.1\r\n".format(self.path) + \
+                       "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
+                       .encode("utf8")
+        if headers:
+            my_headers = self.format_headers(headers)
+        s.send(my_headers)
+
+
+    def read_response(self, s):
+        response = s.makefile("r", encoding="utf8", newline="\r\n")
+        statusline = response.readline()
+        version, status, explanation = statusline.split(" ", 2)
+        return response, status
+
+
+    def read_headers(self, response):
+        response_headers = {}
+        while True:
+            line = response.readline()
+            if line == "\r\n": break
+            header, value = line.split(":", 1)
+            response_headers[header.casefold()] = value.strip()
+        return response_headers
+
+
     def request(self, headers: Optional[Dict[str, str]] = None):
         """Handles getting the page source from the server or local file.
         """
-
-        # Check for local file first'
         if self.scheme == "file":
-            #print('file scheme found')
-#            print("PATH: ", self.path)
-            with open(self.path, "r", encoding="utf8") as f:
-                return f.read()
+            return self.handle_local_file()
         elif self.scheme == "data":
-            print('data scheme found')
-            return self.path
+            return self.handle_data_scheme()
         elif self.scheme == "https" or self.scheme == "http":
-            #sending a request to the server`
-            s = socket.socket(
-                family=socket.AF_INET,
-                type=socket.SOCK_STREAM,
-                proto=socket.IPPROTO_TCP,
-            )
-            if self.scheme == "https":
-                ctx = ssl.create_default_context()
-                s = ctx.wrap_socket(s, server_hostname=self.host)
-            s.connect((self.host, self.port))
-
-            #Handle the headers
-            my_headers =  ("GET {} HTTP/1.1\r\n".format(self.path) + \
-                           "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
-                           .encode("utf8")
-            if headers:
-                my_headers = self.format_headers(headers)
-            s.send(my_headers)
-            
-            #Reading the response form the server
-            response = s.makefile("r", encoding="utf8", newline="\r\n")
-            statusline = response.readline()
-            version, status, explanation = statusline.split(" ", 2)
-            
-            # Redirect if needed
+            s = self.create_socket()
+            self.send_request(s, headers)
+            response, status = self.read_response(s)
             if int(status) >= 300 and int(status) < 400: 
                 return self.handle_redirect(response)
-
-            response_headers = {}
-            while True:
-                line = response.readline()
-                if line == "\r\n": break
-                #Next will come the headers
-                header, value = line.split(":", 1)
-                response_headers[header.casefold()] = value.strip()
-            
-            
-            #Ensure that non of the data is being sent in an unusual way
+            response_headers = self.read_headers(response)
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
             encoding_response = response_headers.get("content-type", "utf8")
             encoding_position = encoding_response.find("charset=")
             encoding = encoding_response[encoding_position + 8:] if encoding_position != -1 else "utf8"
-
             body = response.read() 
             s.close()
             return body
-
 
 
 
