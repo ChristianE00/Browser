@@ -98,8 +98,8 @@ class URL:
 
     def cache_response(self, url, headers, body):
         # Extract max-age from headers
-        cache_control = headers.get('Cache-Control', '')
-        max_age = None
+        cache_control = headers.get('cache-control', '')
+        
         if cache_control:
             directives = cache_control.split(',')
             for directive in directives:
@@ -107,19 +107,19 @@ class URL:
                 if key.lower() == 'max-age':
                     try:
                         max_age = int(val)
+                        #print("max-age:", max_age)
                     except ValueError:
                         pass
-        #print("body:", body)
         # Store response in cache with current time and max-age
+        creation_time = time.time()
         URL.cache[url] = (headers, body, time.time(), max_age)
-       # print("length of cache:", len(URL.cache))
+    
     
     def get_from_cache(self, url):
-        #print("length of cache:", len(URL.cache))
         cached = URL.cache.get(url)
         if cached:
-            #print("Cache hit")
             headers, body, cached_time, max_age = cached
+            cached = headers, cached_time, max_age
             # Check if response is still fresh
             if max_age is None or (time.time() - cached_time) <= max_age:
                 return headers, body, cached_time, max_age
@@ -202,13 +202,17 @@ class URL:
             url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
             if(len(URL.cache) > 0):
                 cached_headers, cached_body, cached_time, max_age = self.get_from_cache(url)
-                #if cached_body and (time.time() - cached_time) <= max_age:
+
+                #if max_age is None:
+                 #   return cached_body
                 if cached_body:
+                    return cached_body
+                '''
+                if max_age is not None and cached_body and (time.time() - cached_time) <= max_age:
+#                if cached_body:
                     #print("Using cached response")
                     return cached_body
-           # else: 
-          #      print("Fetching from server")
-
+                '''
             s = self.create_socket()
             self.send_request(s, headers)
             response, status = self.read_response(s)
