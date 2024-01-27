@@ -1,4 +1,5 @@
 import socket, ssl
+import time
 from typing import Optional, Dict
 
 
@@ -19,10 +20,6 @@ def load(url, view_source: Optional[bool] = False):
     """Load the given URL and convert text tags to character tags.
     """
     # Note: Test for testing extra headers
-    ''' 
-    extra_client_headers = {"test1" : "hehe", "test2" : "hehe2", "User-Agent" : "d"}
-    body = url.request(headers=extra_client_headers)
-    ''' 
     body = url.request().replace("&lt;", "<").replace("&gt;", ">")
     if view_source:
         print(body)
@@ -34,6 +31,7 @@ class URL:
     """
     This class is used to parse the url and request the data from the server
     """
+    cache = {}
     def format_headers(self, headers):
         """Format the given header dictionary into a string.
         """
@@ -54,25 +52,23 @@ class URL:
 
         headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
         headers_text = "\r\n" + user_agent + connection + headers_text
-      #  headers_text = "\r\n" + headers_text + connection
         base_headers = ("GET {} HTTP/1.1\r\n".format(self.path) + \
                     "Host: {}".format(self.host) + \
                     headers_text + "\r\n\r\n").encode("utf8")
-   #     print("base_headers: ", base_headers)
         return base_headers
 
 
     def __init__(self, url):
         """Initiate the URL class with a scheme, host, port, and path.
         """
+
+    
         self.visited_urls = set()
         self.default_headers = {"User-Agent": "default/1.0"} 
         url = url.strip()
-#        print("url: ", url)
         if "://" in url:
             self.scheme, url = url.split("://", 1)
             self.scheme = self.scheme.strip()
-#            print("self.scheme: ", self.scheme, "url: ", url)
             if "/" in url:
                 self.host, url = url.split("/", 1)
             elif "file" not in self.scheme:
@@ -98,8 +94,36 @@ class URL:
             self.path = url
             self.scheme, url = url.split(":", 1)
             self.port = None
-#            print("self.scheme: ", self.scheme, "url: ", url)
 
+
+    def cache_response(self, url, headers, body):
+        # Extract max-age from headers
+        cache_control = headers.get('Cache-Control', '')
+        max_age = None
+        if cache_control:
+            directives = cache_control.split(',')
+            for directive in directives:
+                key, sep, val = directive.strip().partition('=')
+                if key.lower() == 'max-age':
+                    try:
+                        max_age = int(val)
+                    except ValueError:
+                        pass
+        #print("body:", body)
+        # Store response in cache with current time and max-age
+        URL.cache[url] = (headers, body, time.time(), max_age)
+       # print("length of cache:", len(URL.cache))
+    
+    def get_from_cache(self, url):
+        #print("length of cache:", len(URL.cache))
+        cached = URL.cache.get(url)
+        if cached:
+            #print("Cache hit")
+            headers, body, cached_time, max_age = cached
+            # Check if response is still fresh
+            if max_age is None or (time.time() - cached_time) <= max_age:
+                return headers, body, cached_time, max_age
+        return None, None, None, None
 
     def handle_redirect(self, response):
         """Handles the redirect from the server
@@ -110,12 +134,10 @@ class URL:
             header, value = line.split(":", 1)
             if header.casefold() == "location":
                 if "://" not in value:
-                   # print("No Scheme", value, "self.scheme: ", self.scheme, "self.host: ", self.host)
                     value = self.scheme.strip() + "://" + self.host.strip() + value.strip()
                 if value in self.visited_urls:
                     return "Error: Redirect loop detected"
                 self.visited_urls.add(value.strip())
-               # print("redirecting to: ", value)
                 return URL(value).request(None, self.visited_urls)
         return "Error: Redirect without location header"
 
@@ -144,12 +166,9 @@ class URL:
 
 
     def send_request(self, s, headers):
-#        print("entered send_request")
         my_headers =  ("GET {} HTTP/1.1\r\n".format(self.path) + \
                        "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
                        .encode("utf8")
-#        print("my_headers: ", my_headers)
-#        print("headers: ", headers)
         if headers:
             my_headers = self.format_headers(headers)
         s.send(my_headers)
@@ -180,28 +199,50 @@ class URL:
         elif self.scheme == "data":
             return self.handle_data_scheme()
         elif self.scheme == "https" or self.scheme == "http":
+            url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
+            if(len(URL.cache) > 0):
+                cached_headers, cached_body, cached_time, max_age = self.get_from_cache(url)
+                #if cached_body and (time.time() - cached_time) <= max_age:
+                if cached_body:
+                    #print("Using cached response")
+                    return cached_body
+           # else: 
+          #      print("Fetching from server")
+
             s = self.create_socket()
-#            print("send request headers: ", headers)
             self.send_request(s, headers)
             response, status = self.read_response(s)
             
             # other request code
-            url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
             if visited_urls is not None:
                 self.visited_urls = visited_urls
-#            if url in self.visited_urls: 
-#                return "first: Error: Redirect loop detected"
             self.visited_urls.add(url)
-#            print("URL: ", url)
-
+            
+            # handle redirect
             if int(status) >= 300 and int(status) < 400: 
                 return self.handle_redirect(response)
+
             response_headers = self.read_headers(response)
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
+            #print( "response headers: ", response_headers)
             encoding_response = response_headers.get("content-type", "utf8")
             encoding_position = encoding_response.find("charset=")
             encoding = encoding_response[encoding_position + 8:] if encoding_position != -1 else "utf8"
+            if "cache-control" in response_headers:
+               # print("cache-control found")
+                cache_response = response_headers["cache-control"].strip()
+                if "max-age" in cache_response:
+                    #print("Caching response")
+                    max_age = cache_response.split("=")[1]
+                    if int(max_age) > 0:
+                        body = response.read()
+                        s.close()
+                     #   print("url:", url)
+                       # print("first body:", body)
+                        self.cache_response(url, response_headers, body)
+                        return body
+                    
             body = response.read() 
             s.close()
             return body
