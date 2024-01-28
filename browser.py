@@ -1,11 +1,14 @@
-import socket, ssl
-import time
+import socket, ssl, time, tkinter
 from typing import Optional, Dict
+WIDTH, HEIGHT = 800, 600 
+SCROLL_STEP = 100
+HSTEP, VSTEP = 13, 18
 
-
-def show(body):
+def lex(body): 
     """Show the body of the HTML page, without the tags.
     """
+
+    text = ""
     in_tag = False
     for c in body:
         if c == "<":
@@ -13,24 +16,89 @@ def show(body):
         elif c == ">":
             in_tag = False
         elif not in_tag:
-            print(c, end="")
+            text += c
+    return text
 
 
-def load(url, view_source: Optional[bool] = False):
-    """Load the given URL and convert text tags to character tags.
+def layout(text):
+    """Layout the text on the screen.
     """
-    # Note: Test for testing extra headers
-    body = url.request().replace("&lt;", "<").replace("&gt;", ">")
-    if view_source:
-        print(body)
-    else:
-        show(body)
+
+    display_list = []
+    cursor_x, cursor_y = HSTEP, VSTEP
+    for c in text:
+        display_list.append((cursor_x, cursor_y, c))
+        cursor_x += HSTEP
+        if cursor_x >= WIDTH - HSTEP:
+            cursor_x = HSTEP
+            cursor_y += VSTEP
+    return display_list
+
+
+class Browser:
+    """A simple browser that can load and display a web page.
+    """
+
+    def __init__(self): 
+        self.window = tkinter.Tk()
+        self.canvas = tkinter.Canvas(
+            self.window,
+            width=WIDTH,
+            height=HEIGHT,
+        )
+        self.canvas.pack()
+        self.scroll = 0
+        self.window.bind("<Down>", self.scrolldown)
+        self.window.bind("<MouseWheel>", self.scrolldown)
+
+    def scrolldown(self, e):
+        """Scroll down by SCROLL_STEP pixels.
+        """
+
+        # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
+        #NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
+        #      On Linus you need to use differenct events to scroll up and scroll down
+        if hasattr(e, 'delta') and e.delta < 0 or hasattr(e, 'delta') and e.delta == 0:    
+            print("has delta: ", e.delta) 
+            self.scroll += SCROLL_STEP
+            self.draw()
+
+    def draw(self):
+        """Draw the display list.
+        """
+
+        self.canvas.delete("all")
+        for x, y, c in self.display_list:
+            self.canvas.create_text(x, y - self.scroll, text=c)
+
+
+    def load(self, url, view_source: Optional[bool] = False):
+        """Load the given URL and convert text tags to character tags.
+        """
+
+        # Note: Test for testing extra headers
+        body = url.request().replace("&lt;", "<").replace("&gt;", ">")
+        if view_source:
+            print(body)
+        else:
+
+            cursor_x, cursor_y = HSTEP, VSTEP
+            text = lex(body)
+            self.display_list = layout(text)
+            self.draw()
+
+
+        
+
+
+
 
 
 class URL:
     """
     This class is used to parse the url and request the data from the server
     """
+
     cache = {}
     def format_headers(self, headers):
         """Format the given header dictionary into a string.
@@ -62,7 +130,6 @@ class URL:
         """Initiate the URL class with a scheme, host, port, and path.
         """
 
-    
         self.visited_urls = set()
         self.default_headers = {"User-Agent": "default/1.0"} 
         url = url.strip()
@@ -97,9 +164,11 @@ class URL:
 
 
     def cache_response(self, url, headers, body):
+        """Cache the response from the server if possible.
+        """
+
         # Extract max-age from headers
         cache_control = headers.get('cache-control', '')
-        
         if cache_control:
             directives = cache_control.split(',')
             for directive in directives:
@@ -107,7 +176,6 @@ class URL:
                 if key.lower() == 'max-age':
                     try:
                         max_age = int(val)
-                        #print("max-age:", max_age)
                     except ValueError:
                         pass
         # Store response in cache with current time and max-age
@@ -116,6 +184,9 @@ class URL:
     
     
     def get_from_cache(self, url):
+        """Get the response from the cache if possible.
+        """
+
         cached = URL.cache.get(url)
         if cached:
             headers, body, cached_time, max_age = cached
@@ -128,6 +199,7 @@ class URL:
     def handle_redirect(self, response):
         """Handles the redirect from the server
         """
+
         while True:
             line = response.readline()
             if line == "\r\n": break
@@ -144,15 +216,24 @@ class URL:
 
 
     def handle_local_file(self):
+        """Handles the local file file:///path/to/file
+        """
+
         with open(self.path, "r", encoding="utf8") as f:
             return f.read()
 
 
     def handle_data_scheme(self):
+        """Handles the data scheme data:text/html, <html>...</html>
+        """
+
         return self.path
 
 
     def create_socket(self):
+        """Create a socket and connect to the server.
+        """
+
         s = socket.socket(
             family=socket.AF_INET,
             type=socket.SOCK_STREAM,
@@ -166,6 +247,9 @@ class URL:
 
 
     def send_request(self, s, headers):
+        """Send the request to the server.
+        """
+
         my_headers =  ("GET {} HTTP/1.1\r\n".format(self.path) + \
                        "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(self.host)) \
                        .encode("utf8")
@@ -175,6 +259,9 @@ class URL:
 
 
     def read_response(self, s):
+        """Read the response from the server.
+        """
+
         response = s.makefile("r", encoding="utf8", newline="\r\n")
         statusline = response.readline()
         version, status, explanation = statusline.split(" ", 2)
@@ -182,6 +269,9 @@ class URL:
 
 
     def read_headers(self, response):
+        """Read the headers from the server.
+        """
+
         response_headers = {}
         while True:
             line = response.readline()
@@ -194,25 +284,19 @@ class URL:
     def request(self, headers: Optional[Dict[str, str]] = None, visited_urls=None):
         """Handles getting the page source from the server or local file.
         """
+
         if self.scheme == "file":
             return self.handle_local_file()
         elif self.scheme == "data":
             return self.handle_data_scheme()
         elif self.scheme == "https" or self.scheme == "http":
             url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
-            if(len(URL.cache) > 0):
-                cached_headers, cached_body, cached_time, max_age = self.get_from_cache(url)
 
-                #if max_age is None:
-                 #   return cached_body
-                if cached_body:
-                    return cached_body
-                '''
-                if max_age is not None and cached_body and (time.time() - cached_time) <= max_age:
-#                if cached_body:
-                    #print("Using cached response")
-                    return cached_body
-                '''
+            # check if url is in cache, use cached response if it is
+            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(url)
+            if cached_body:
+                return cached_body
+
             s = self.create_socket()
             self.send_request(s, headers)
             response, status = self.read_response(s)
@@ -229,21 +313,18 @@ class URL:
             response_headers = self.read_headers(response)
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
-            #print( "response headers: ", response_headers)
             encoding_response = response_headers.get("content-type", "utf8")
             encoding_position = encoding_response.find("charset=")
             encoding = encoding_response[encoding_position + 8:] if encoding_position != -1 else "utf8"
+
+            # check if response is cacheable and cache it if it is
             if "cache-control" in response_headers:
-               # print("cache-control found")
                 cache_response = response_headers["cache-control"].strip()
                 if "max-age" in cache_response:
-                    #print("Caching response")
                     max_age = cache_response.split("=")[1]
                     if int(max_age) > 0:
                         body = response.read()
                         s.close()
-                     #   print("url:", url)
-                       # print("first body:", body)
                         self.cache_response(url, response_headers, body)
                         return body
                     
@@ -258,9 +339,8 @@ class URL:
 
 if __name__ == "__main__":
     import sys
-#    load(URL(sys.argv[1]), True)
-
-    load(URL(sys.argv[1]))
+    Browser().load(URL(sys.argv[1]))
+    tkinter.mainloop()
 
 
 
