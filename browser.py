@@ -27,10 +27,13 @@ def layout(text):
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
-
+        if c == "\n":
+            cursor_x = HSTEP
+            cursor_y += VSTEP * 2
+            continue
         display_list.append((cursor_x, cursor_y, c))
         cursor_x += HSTEP
-        if cursor_x >= WIDTH - HSTEP or c == "\n":
+        if cursor_x >= WIDTH - HSTEP:
             cursor_x = HSTEP
             cursor_y += VSTEP
     return display_list
@@ -55,7 +58,8 @@ class Browser:
             width=WIDTH,
             height=HEIGHT,
         )
-        self.canvas.pack()
+        self.window.bind("<Configure>", self.resize)
+        self.canvas.pack(fill=tkinter.BOTH, expand=1)
         GRINNING_FACE_IMAGE = tkinter.PhotoImage(file="openmoji/1F600.png")
         self.scroll = 0
         self.scrolling = False
@@ -70,18 +74,17 @@ class Browser:
 
     """
 
-
+    def resize(self, e):
+        """Resize the canvas and redraw the display list."""
+        global WIDTH, HEIGHT
+        WIDTH, HEIGHT = e.width, e.height
+        layout(self.text)
+        print("Resized to", WIDTH, HEIGHT)
+        self.draw()
 
     def scrolldown(self, e):
-        global C
-       # print("C: ", C)
-        if C == 1:
-            print("self.scroll: ", self.scroll, "self.display_list ", self.display_list, "HEIGHT: ", HEIGHT)
-            self.scroll += SCROLL_STEP
-            self.draw()
-            #print("scrolling down")
-   #     C += 1 
         """Scroll down by SCROLL_STEP pixels."""
+
         # Default for Windows and Linux
         delta = e.delta if hasattr(e, "delta") else None
         if hasattr(e, "delta"):
@@ -92,26 +95,16 @@ class Browser:
         # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
         # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
         #      On Linux you need to use differenct events to scroll up and scroll down
-        '''
+        # Scroll up
+        
         if (delta is not None and delta > 0) or (hasattr(e,"keysym") and e.keysym == "Up"):
             if self.scroll > 0:
-                print("scrolling up")
                 self.scroll -= SCROLL_STEP
                 self.draw()
-            else:
-                print("already at top, cannot scroll further up")
-
-
-#        if (delta is not None and delta < 0) or (hasattr(e,"keysym") and e.keysym == "Down"):
-        else:
-           # print("scrolling down")
-        '''
-        if self.display_list[-1][1] >= self.scroll + SCROLL_STEP:
-#                print("scrolling down")
+        
+        elif self.display_list[-1][1] >= self.scroll + SCROLL_STEP:
             self.scroll += SCROLL_STEP
             self.draw()
-#            else:
-#                print("at bottom, cannot scroll further down")
 
 
 
@@ -153,6 +146,7 @@ class Browser:
             body = body.replace("<p>", "<p>\\n")
             cursor_x, cursor_y = HSTEP, VSTEP
             text = lex(body)
+            self.text = text
             self.display_list = layout(text)
             self.draw()
 
