@@ -3,14 +3,13 @@ from typing import Optional, Dict
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
-HSTEP, VSTEP = 13, 18
+HSTEP, VSTEP, C = 13, 18, 0
 GRINNING_FACE_IMAGE = None
 
 
 def lex(body):
     """Show the body of the HTML page, without the tags."""
 
-    emoji_pattern = "&#x.*?;"
     text = ""
     in_tag = False
     for c in body:
@@ -20,40 +19,30 @@ def lex(body):
             in_tag = False
         elif not in_tag:
             text += c
-
-    matches = re.finditer(emoji_pattern, text)
-    for match in matches:
-        print(
-            "match: ", match.group(0), " start: ", match.start(), " end: ", match.end()
-        )
     return text
 
 
 def layout(text):
     """Layout the text on the screen."""
-
-    new_line = False
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
-    grapheme_cluster = ""
     for c in text:
-        if c == "\\":
-            new_line = True
-            continue
-        elif new_line:
-            if c == "n":
-                cursor_y += VSTEP * 2
-                cursor_x = HSTEP
-                continue
-            new_line = False
 
         display_list.append((cursor_x, cursor_y, c))
         cursor_x += HSTEP
-        if cursor_x >= WIDTH - HSTEP:
+        if cursor_x >= WIDTH - HSTEP or c == "\n":
             cursor_x = HSTEP
             cursor_y += VSTEP
     return display_list
 
+
+def set_parameters(**params):
+	global WIDTH, HEIGHT, HSTEP, VSTEP, SCROLL_STEP
+	if "WIDTH" in params: WIDTH = params["WIDTH"]
+	if "HEIGHT" in params: HEIGHT = params["HEIGHT"]
+	if "HSTEP" in params: HSTEP = params["HSTEP"]
+	if "VSTEP" in params: VSTEP = params["VSTEP"]
+	if "SCROLL_STEP" in params: SCROLL_STEP = params["SCROLL_STEP"]
 
 class Browser:
     """A simple browser that can load and display a web page."""
@@ -81,9 +70,18 @@ class Browser:
 
     """
 
-    def scrolldown(self, e):
-        """Scroll down by SCROLL_STEP pixels."""
 
+
+    def scrolldown(self, e):
+        global C
+       # print("C: ", C)
+        if C == 1:
+            print("self.scroll: ", self.scroll, "self.display_list ", self.display_list, "HEIGHT: ", HEIGHT)
+            self.scroll += SCROLL_STEP
+            self.draw()
+            #print("scrolling down")
+   #     C += 1 
+        """Scroll down by SCROLL_STEP pixels."""
         # Default for Windows and Linux
         delta = e.delta if hasattr(e, "delta") else None
         if hasattr(e, "delta"):
@@ -94,19 +92,28 @@ class Browser:
         # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
         # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
         #      On Linux you need to use differenct events to scroll up and scroll down
-        if (delta is not None and delta < 0) or e.keysym == "Down":
-            if self.display_list[-1][1] * 1.1 > self.scroll + HEIGHT:
-                self.scroll += SCROLL_STEP
-                self.draw()
-            else:
-                print("at bottom, cannot scroll further down")
-
-        elif (delta is not None and delta > 0) or e.keysym == "Up":
+        '''
+        if (delta is not None and delta > 0) or (hasattr(e,"keysym") and e.keysym == "Up"):
             if self.scroll > 0:
+                print("scrolling up")
                 self.scroll -= SCROLL_STEP
                 self.draw()
             else:
                 print("already at top, cannot scroll further up")
+
+
+#        if (delta is not None and delta < 0) or (hasattr(e,"keysym") and e.keysym == "Down"):
+        else:
+           # print("scrolling down")
+        '''
+        if self.display_list[-1][1] >= self.scroll + SCROLL_STEP:
+#                print("scrolling down")
+            self.scroll += SCROLL_STEP
+            self.draw()
+#            else:
+#                print("at bottom, cannot scroll further down")
+
+
 
     def draw(self):
         """Draw the display list."""
@@ -140,9 +147,6 @@ class Browser:
 
         body = url.request().replace("&lt;", "<").replace("&gt;", ">")
 
-        print(
-            "matches: ",
-        )
         if view_source:
             print(body)
         else:
