@@ -1,15 +1,13 @@
 import socket, ssl, time, tkinter, platform, re, unicodedata
 from typing import Optional, Dict
 
-WIDTH, HEIGHT = 800, 600
-SCROLL_STEP = 100
-HSTEP, VSTEP, C = 13, 18, 0
+WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP  = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
+EMOJIS = {}
 
 
 def lex(body):
     """Show the body of the HTML page, without the tags."""
-
     text = ""
     in_tag = False
     for c in body:
@@ -57,7 +55,7 @@ def set_parameters(**params):
 class Browser:
     """A simple browser that can load and display a web page."""
     def __init__(self):
-        global GRINNING_FACE_IMAGE
+        global GRINNING_FACE_IMAGE, EMOJIS
         self.window = tkinter.Tk()
         self.canvas = tkinter.Canvas(
             self.window,
@@ -67,6 +65,7 @@ class Browser:
         self.window.bind("<Configure>", self.resize)
         self.canvas.pack(fill=tkinter.BOTH, expand=1)
         GRINNING_FACE_IMAGE = tkinter.PhotoImage(file="openmoji/1F600.png")
+        EMOJIS["\N{GRINNING FACE}"] = GRINNING_FACE_IMAGE
         self.scroll, self.last_y = 0, 0
         self.scrolling = False
         self.window.bind("<Down>", self.scrolldown)
@@ -79,13 +78,14 @@ class Browser:
 
     """
 
+
     def resize(self, e):
         """Resize the canvas and redraw the display list."""
         global WIDTH, HEIGHT
         WIDTH, HEIGHT = e.width, e.height
-        layout(self.text)
-        print("Resized to", WIDTH, HEIGHT)
+        self.display_list = layout(self.text)
         self.draw()
+
 
     def scrolldown(self, e):
         """Scroll down by SCROLL_STEP pixels."""
@@ -112,6 +112,7 @@ class Browser:
             self.scroll += SCROLL_STEP
             self.draw()
 
+
     def draw(self):
         """Draw the display list."""
         self.canvas.delete("all")
@@ -120,11 +121,9 @@ class Browser:
                 continue
             if y + VSTEP < self.scroll:
                 continue
-            # print("c: ", c)
-            if c == "\N{GRINNING FACE}":
-                print("grinning face")
-                self.canvas_create_image(x, y - self.scroll, image=GRINNING_FACE_IMAGE)
-                return
+            if c in EMOJIS:
+                self.canvas.create_image(x, y - self.scroll, image=EMOJIS[c])
+                continue
             self.canvas.create_text(x, y - self.scroll, text=c)
 
         if self.display_list[-1][1] > HEIGHT:
@@ -134,8 +133,10 @@ class Browser:
                 WIDTH,
                 HEIGHT / self.display_list[-1][1] * HEIGHT
                 + (self.scroll / self.display_list[-1][1]) * HEIGHT,
+                0,
                 fill="blue",
             )
+
 
     def load(self, url, view_source: Optional[bool] = False):
         """Load the given URL and convert text tags to character tags."""
@@ -155,10 +156,10 @@ class Browser:
 
 
 class URL:
-    """
-    This class is used to parse the url and request the data from the server
-    """
+    """This class is used to parse the url and request the data from the server"""
+
     cache = {}
+
     def format_headers(self, headers):
         """Format the given header dictionary into a string."""
         user_agent_found, connection_found = False, False
@@ -238,6 +239,7 @@ class URL:
         creation_time = time.time()
         URL.cache[url] = (headers, body, time.time(), max_age)
 
+
     def get_from_cache(self, url):
         """Get the response from the cache if possible."""
         cached = URL.cache.get(url)
@@ -248,6 +250,7 @@ class URL:
             if max_age is None or (time.time() - cached_time) <= max_age:
                 return headers, body, cached_time, max_age
         return None, None, None, None
+
 
     def handle_redirect(self, response):
         """Handles the redirect from the server"""
@@ -267,14 +270,17 @@ class URL:
                 return URL(value).request(None, self.visited_urls)
         return "Error: Redirect without location header"
 
+
     def handle_local_file(self):
         """Handles the local file file:///path/to/file"""
         with open(self.path, "r", encoding="utf8") as f:
             return f.read()
 
+
     def handle_data_scheme(self):
         """Handles the data scheme data:text/html, <html>...</html>"""
         return self.path
+
 
     def create_socket(self):
         """Create a socket and connect to the server."""
@@ -289,6 +295,7 @@ class URL:
         s.connect((self.host, self.port))
         return s
 
+
     def send_request(self, s, headers):
         """Send the request to the server."""
         my_headers = (
@@ -301,12 +308,14 @@ class URL:
             my_headers = self.format_headers(headers)
         s.send(my_headers)
 
+
     def read_response(self, s):
         """Read the response from the server."""
         response = s.makefile("r", encoding="utf8", newline="\r\n")
         statusline = response.readline()
         version, status, explanation = statusline.split(" ", 2)
         return response, status
+
 
     def read_headers(self, response):
         """Read the headers from the server."""
@@ -319,9 +328,9 @@ class URL:
             response_headers[header.casefold()] = value.strip()
         return response_headers
 
+
     def request(self, headers: Optional[Dict[str, str]] = None, visited_urls=None):
         """Handles getting the page source from the server or local file."""
-
         if self.scheme == "file":
             return self.handle_local_file()
         elif self.scheme == "data":
