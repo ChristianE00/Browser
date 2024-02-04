@@ -310,6 +310,7 @@ class URL:
 
     def read_headers(self, response):
         """Read the headers from the server."""
+
         response_headers = {}
         while True:
             line = response.readline()
