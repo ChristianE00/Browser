@@ -1,4 +1,4 @@
-import socket, ssl, time, tkinter, platform, re, unicodedata
+import socket, ssl, time, tkinter, platform, re, unicodedata, tkinter.font
 from typing import Optional, Dict
 
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP  = 800, 600, 13, 18, 0, 100
@@ -8,33 +8,23 @@ EMOJIS = {}
 
 def lex(body):
     """Show the body of the HTML page, without the tags."""
-    text = ""
+    out= []
+    buffer = ""
     in_tag = False
     for c in body:
         if c == "<":
             in_tag = True
+            if buffer: out.append(Text(buffer))
+            buffer = "" 
         elif c == ">":
             in_tag = False
-        elif not in_tag:
-            text += c
-    return text
-
-
-def layout(text):
-    """Layout the text on the screen."""
-    display_list = []
-    cursor_x, cursor_y = HSTEP, VSTEP
-    for c in text:
-        if c == "\n":
-            cursor_x = HSTEP
-            cursor_y += VSTEP * 2
-            continue
-        display_list.append((cursor_x, cursor_y, c))
-        cursor_x += HSTEP
-        if cursor_x >= WIDTH - HSTEP:
-            cursor_x = HSTEP
-            cursor_y += VSTEP
-    return display_list
+            out.append(Tag(buffer))
+            buffer = ""
+        else:
+            buffer += c
+    if not in_tag and buffer:
+        out.append(Text(buffer))
+    return out
 
 
 def set_parameters(**params):
@@ -50,6 +40,93 @@ def set_parameters(**params):
         VSTEP = params["VSTEP"]
     if "SCROLL_STEP" in params:
         SCROLL_STEP = params["SCROLL_STEP"]
+
+
+class Layout:
+    def __init__(self, tokens):
+        self.display_list = [] 
+        self.line = []
+        self.cursor_x, self.cursor_y = HSTEP, VSTEP
+        self.weight, self.style = "normal", "roman" 
+        self.size = 16
+
+        for tok in tokens:
+            self.token(tok)
+        self.flush()
+
+
+    def flush(self):
+        print("flush")
+        if not self.line: return
+        max_ascent = max([font.metrics("ascent") for x, word, font in self.line])
+        baseline = self.cursor_y + 1.25 * max_ascent
+
+        for x, word, font in self.line:
+            y = baseline - font.metrics("ascent")
+            self.display_list.append((x, y, word, font))
+
+        max_descent = max([font.metrics("descent") for x, word, font in self.line])
+        self.cursor_y = baseline + 1.25 * max_descent
+        self.cursor_x = HSTEP
+        self.line = []
+
+
+    def token(self, tok):
+        if isinstance(tok, Text):
+            for word in tok.text.split():
+                self.word(word)
+        elif tok.tag == "br":
+            self.flush()
+        elif tok.tag == "/p":
+            self.flush()
+            self.cursor_y += VSTEP
+        elif tok.tag == "i":
+            self.style = "italic"
+        elif tok.tag == "/i":
+            self.style = "roman"
+        elif tok.tag == "b":
+            self.weight = "bold"
+        elif tok.tag == "/b":
+            self.weight = "normal"
+        elif tok.tag == "small":
+            self.size -= 2
+        elif tok.tag == "/small":
+            self.size += 2
+        elif tok.tag == "big":
+            self.size += 4
+        elif tok.tag == "/big":
+            self.size -= 4
+    
+
+    def word(self, word):
+        font = tkinter.font.Font(
+            size=self.size,
+            weight= self.weight,
+            slant= self.style,
+        )
+        w = font.measure(word)
+        if word == "\n":
+            self.cursor_x = HSTEP
+            self.cursor_y += VSTEP * 2
+            return
+        if self.cursor_x + w >= WIDTH - HSTEP:
+            self.flush()
+            self.cursor_y += font.metrics("linespace") * 1.25
+            self.cursor_x = HSTEP
+        #self.display_list.append((self.cursor_x, self.cursor_y, word, font))
+        self.line.append((self.cursor_x, word, font))
+        self.cursor_x += w + font.measure(" ")
+
+
+class Text:
+    def __init__(self, text: str):
+        self.text = text
+
+
+class Tag:
+    def __init__(self, tag):
+        self.tag = tag
+
 
 
 class Browser:
@@ -71,39 +148,25 @@ class Browser:
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<MouseWheel>", self.scrolldown)
 
-    """ NOTE: Fix later
-        self.windows.bind("<Button-1>", self.start_scroll)
-        self.window.bind("<B!-Motion>", self.perform_scroll)
-        self.window.bind("<ButtonRelease-1>", self.end_scroll)
-
-    """
 
 
     def resize(self, e):
         """Resize the canvas and redraw the display list."""
         global WIDTH, HEIGHT
         WIDTH, HEIGHT = e.width, e.height
-        self.display_list = layout(self.text)
-        self.draw()
+
 
 
     def scrolldown(self, e):
         """Scroll down by SCROLL_STEP pixels."""
-        # Default for Windows and Linux
-        delta = e.delta if hasattr(e, "delta") else None
-        if hasattr(e, "delta"):
-            # For MacOS
-            if platform.system() == "Darwin":
-                delta = e.delta / 120
-
+        # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
+        delta = e.delta / 120 if hasattr(e, "delta") and e.delta is not None and platform.system() == "Darwin" else e.delta if hasattr(e, "delta") else None
         # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
         # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
         #      On Linux you need to use differenct events to scroll up and scroll down
         # Scroll up
 
-        if (delta is not None and delta > 0) or (
-            hasattr(e, "keysym") and e.keysym == "Up"
-        ):
+        if (delta is not None and delta > 0) or (hasattr(e, "keysym") and e.keysym == "Up"):
             if self.scroll > 0:
                 self.scroll -= SCROLL_STEP
                 self.draw()
@@ -116,7 +179,8 @@ class Browser:
     def draw(self):
         """Draw the display list."""
         self.canvas.delete("all")
-        for x, y, c in self.display_list:
+        print('self.display_list', self.display_list)
+        for x, y, c, d in self.display_list:
             if y > self.scroll + HEIGHT:
                 continue
             if y + VSTEP < self.scroll:
@@ -124,7 +188,7 @@ class Browser:
             if c in EMOJIS:
                 self.canvas.create_image(x, y - self.scroll, image=EMOJIS[c])
                 continue
-            self.canvas.create_text(x, y - self.scroll, text=c)
+            self.canvas.create_text(x, y - self.scroll, text=c, font=d, anchor="nw")
 
         if self.display_list[-1][1] > HEIGHT:
             self.canvas.create_rectangle(
@@ -133,7 +197,6 @@ class Browser:
                 WIDTH,
                 HEIGHT / self.display_list[-1][1] * HEIGHT
                 + (self.scroll / self.display_list[-1][1]) * HEIGHT,
-                0,
                 fill="blue",
             )
 
@@ -149,9 +212,9 @@ class Browser:
         else:
             body = body.replace("<p>", "<p>\\n")
             cursor_x, cursor_y = HSTEP, VSTEP
-            text = lex(body)
-            self.text = text
-            self.display_list = layout(text)
+            tokens = lex(body)
+            self.text = tokens 
+            self.display_list = Layout(tokens).display_list
             self.draw()
 
 
