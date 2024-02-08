@@ -3,7 +3,18 @@ from typing import Optional, Dict
 
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP  = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
-EMOJIS = {}
+EMOJIS, FONTS = {}, {}
+
+def get_font(size, weight, slant):
+    """Get a font from the cache or create it and add it to the cache."""
+    key = (size, weight, slant)
+    
+    # If the font is not in the cache, create it and add it to the cache
+    if key not in FONTS:
+        font = tkinter.font.Font(size=size, weight=weight, slant=slant)
+        label = tkinter.Label(font=font)
+        FONTS[key] = (font, label)
+    return FONTS[key][0]
 
 
 def lex(body):
@@ -43,6 +54,7 @@ def set_parameters(**params):
 
 
 class Layout:
+    """A class that takes a list of tokens and converts it to a display list."""
     def __init__(self, tokens):
         self.display_list = [] 
         self.line = []
@@ -55,26 +67,21 @@ class Layout:
         self.flush()
 
 
-    def flush(self):
-        print("flush")
-        if not self.line: return
-        max_ascent = max([font.metrics("ascent") for x, word, font in self.line])
-        baseline = self.cursor_y + 1.25 * max_ascent
-
-        for x, word, font in self.line:
-            y = baseline - font.metrics("ascent")
-            self.display_list.append((x, y, word, font))
-
-        max_descent = max([font.metrics("descent") for x, word, font in self.line])
-        self.cursor_y = baseline + 1.25 * max_descent
-        self.cursor_x = HSTEP
-        self.line = []
-
 
     def token(self, tok):
+        """Process a token and add it to the display list."""
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
+        elif tok.tag == "h1 class=\"title\"":
+            self.flush()
+        elif tok.tag == "/h1":
+            self.flush(True)
+        elif tok.tag == "sup":
+            self.size =int( self.size / 2)
+        elif tok.tag == "/sup":
+            self.size = int(self.size * 2)
+
         elif tok.tag == "br":
             self.flush()
         elif tok.tag == "/p":
@@ -96,14 +103,33 @@ class Layout:
             self.size += 4
         elif tok.tag == "/big":
             self.size -= 4
+
+
+    def flush(self, center=False):
+        """Flush the current line to the display list."""
+        if not self.line: return
+        max_ascent = max([font.metrics("ascent") for x, word, font in self.line])
+        baseline = self.cursor_y + 1.25 * max_ascent
+        if center:
+            last_word_width = self.line[-1][2].measure(self.line[-1][1])
+            line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
+            centered_x = (WIDTH - line_length) / 2
+            for x, word, font in self.line:
+                y = baseline - font.metrics("ascent")
+                self.display_list.append((centered_x + x - self.line[0][0], y, word, font))
+        else:
+            for x, word, font in self.line:
+                y = baseline - font.metrics("ascent")
+                self.display_list.append((x, y, word, font))
+        max_descent = max([font.metrics("descent") for x, word, font in self.line])
+        self.cursor_y = baseline + 1.25 * max_descent
+        self.cursor_x = HSTEP
+        self.line = []
     
 
     def word(self, word):
-        font = tkinter.font.Font(
-            size=self.size,
-            weight= self.weight,
-            slant= self.style,
-        )
+        """Add a word to the current line."""
+        font = get_font(self.size, self.weight, self.style)
         w = font.measure(word)
         if word == "\n":
             self.cursor_x = HSTEP
@@ -113,20 +139,29 @@ class Layout:
             self.flush()
             self.cursor_y += font.metrics("linespace") * 1.25
             self.cursor_x = HSTEP
-        #self.display_list.append((self.cursor_x, self.cursor_y, word, font))
+            print("cursor_x", self.cursor_x, "word", word)
         self.line.append((self.cursor_x, word, font))
         self.cursor_x += w + font.measure(" ")
 
 
 class Text:
+    """A simple class to represent a text token."""
     def __init__(self, text: str):
         self.text = text
 
 
+    def __repr__(self):
+        return "Text('{}')".format(self.text)
+
+
 class Tag:
+    """A simple class to represent a tag token."""
     def __init__(self, tag):
         self.tag = tag
 
+
+    def __repr__(self):
+        return "Tag('{}')".format(self.tag)
 
 
 class Browser:
@@ -179,7 +214,6 @@ class Browser:
     def draw(self):
         """Draw the display list."""
         self.canvas.delete("all")
-        print('self.display_list', self.display_list)
         for x, y, c, d in self.display_list:
             if y > self.scroll + HEIGHT:
                 continue
