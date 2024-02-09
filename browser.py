@@ -1,14 +1,15 @@
 import socket, ssl, time, tkinter, platform, re, unicodedata, tkinter.font
 from typing import Optional, Dict
 
-WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP  = 800, 600, 13, 18, 0, 100
+WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS, FONTS = {}, {}
+
 
 def get_font(size, weight, slant):
     """Get a font from the cache or create it and add it to the cache."""
     key = (size, weight, slant)
-    
+
     # If the font is not in the cache, create it and add it to the cache
     if key not in FONTS:
         font = tkinter.font.Font(size=size, weight=weight, slant=slant)
@@ -19,14 +20,15 @@ def get_font(size, weight, slant):
 
 def lex(body):
     """Show the body of the HTML page, without the tags."""
-    out= []
+    out = []
     buffer = ""
     in_tag = False
     for c in body:
         if c == "<":
             in_tag = True
-            if buffer: out.append(Text(buffer))
-            buffer = "" 
+            if buffer:
+                out.append(Text(buffer))
+            buffer = ""
         elif c == ">":
             in_tag = False
             out.append(Tag(buffer))
@@ -55,33 +57,34 @@ def set_parameters(**params):
 
 class Layout:
     """A class that takes a list of tokens and converts it to a display list."""
+
     def __init__(self, tokens):
-        self.display_list = [] 
+        self.display_list = []
         self.line = []
         self.cursor_x, self.cursor_y = HSTEP, VSTEP
-        self.weight, self.style = "normal", "roman" 
+        self.weight, self.style = "normal", "roman"
         self.size = 16
+        self.superscript = False
 
         for tok in tokens:
             self.token(tok)
         self.flush()
-
-
 
     def token(self, tok):
         """Process a token and add it to the display list."""
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
-        elif tok.tag == "h1 class=\"title\"":
+        elif tok.tag == 'h1 class="title"':
             self.flush()
         elif tok.tag == "/h1":
             self.flush(True)
         elif tok.tag == "sup":
-            self.size =int( self.size / 2)
+            self.size = int(self.size / 2)
+            self.superscript = True
         elif tok.tag == "/sup":
+            self.superscript = False
             self.size = int(self.size * 2)
-
         elif tok.tag == "br":
             self.flush()
         elif tok.tag == "/p":
@@ -104,51 +107,62 @@ class Layout:
         elif tok.tag == "/big":
             self.size -= 4
 
-
     def flush(self, center=False):
         """Flush the current line to the display list."""
-        if not self.line: return
-        max_ascent = max([font.metrics("ascent") for x, word, font in self.line])
+        if not self.line:
+            return
+        max_ascent = max([font.metrics("ascent") for x, word, font, s in self.line])
         baseline = self.cursor_y + 1.25 * max_ascent
-        if center:
-            last_word_width = self.line[-1][2].measure(self.line[-1][1])
-            line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
-            centered_x = (WIDTH - line_length) / 2
-            for x, word, font in self.line:
-                y = baseline - font.metrics("ascent")
-                self.display_list.append((centered_x + x - self.line[0][0], y, word, font))
-        else:
-            for x, word, font in self.line:
-                y = baseline - font.metrics("ascent")
-                self.display_list.append((x, y, word, font))
-        max_descent = max([font.metrics("descent") for x, word, font in self.line])
+        last_word_width = self.line[-1][2].measure(self.line[-1][1])
+        line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
+        centered_x = (WIDTH - line_length) / 2
+        for x, word, font, s in self.line:
+            x = centered_x + x - self.line[0][0] if center else x
+            y = baseline - max_ascent if s else baseline - font.metrics("ascent") 
+            self.display_list.append((x, y, word, font))
+
+        max_descent = max([font.metrics("descent") for x, word, font, s in self.line])
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = HSTEP
         self.line = []
-    
 
     def word(self, word):
         """Add a word to the current line."""
+
         font = get_font(self.size, self.weight, self.style)
         w = font.measure(word)
         if word == "\n":
-            self.cursor_x = HSTEP
-            self.cursor_y += VSTEP * 2
+            self.cursor_x, self.cursor_y = HSTEP, self.cursor_y + VSTEP * 2
             return
-        if self.cursor_x + w >= WIDTH - HSTEP:
-            self.flush()
-            self.cursor_y += font.metrics("linespace") * 1.25
-            self.cursor_x = HSTEP
-            print("cursor_x", self.cursor_x, "word", word)
-        self.line.append((self.cursor_x, word, font))
+
+        
+        if self.cursor_x + w > WIDTH - HSTEP:
+            if "\N{SOFT HYPHEN}" in word:               
+                words = word.split("\N{SOFT HYPHEN}")
+                word = ""
+                for current_word in words:
+                    if self.cursor_x + font.measure(word + "-") + font.measure(current_word) <= WIDTH - HSTEP:
+                        word += current_word
+                    else:
+                        self.word(word + "-")
+                        self.flush()
+                        word = current_word
+                self.word(word)
+                return
+            else:            
+                #print("entered cursor_y: ", self.cursor_y)
+                self.flush()
+                self.cursor_y += font.metrics("linespace") * 1.25
+                self.cursor_x = HSTEP
+        self.line.append((self.cursor_x, word, font, self.superscript))
         self.cursor_x += w + font.measure(" ")
 
 
 class Text:
     """A simple class to represent a text token."""
+
     def __init__(self, text: str):
         self.text = text
-
 
     def __repr__(self):
         return "Text('{}')".format(self.text)
@@ -156,9 +170,9 @@ class Text:
 
 class Tag:
     """A simple class to represent a tag token."""
+
     def __init__(self, tag):
         self.tag = tag
-
 
     def __repr__(self):
         return "Tag('{}')".format(self.tag)
@@ -166,6 +180,7 @@ class Tag:
 
 class Browser:
     """A simple browser that can load and display a web page."""
+
     def __init__(self):
         global GRINNING_FACE_IMAGE, EMOJIS
         self.window = tkinter.Tk()
@@ -183,25 +198,29 @@ class Browser:
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<MouseWheel>", self.scrolldown)
 
-
-
     def resize(self, e):
         """Resize the canvas and redraw the display list."""
         global WIDTH, HEIGHT
         WIDTH, HEIGHT = e.width, e.height
 
-
-
     def scrolldown(self, e):
         """Scroll down by SCROLL_STEP pixels."""
         # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
-        delta = e.delta / 120 if hasattr(e, "delta") and e.delta is not None and platform.system() == "Darwin" else e.delta if hasattr(e, "delta") else None
+        delta = (
+            e.delta / 120
+            if hasattr(e, "delta")
+            and e.delta is not None
+            and platform.system() == "Darwin"
+            else e.delta if hasattr(e, "delta") else None
+        )
         # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
         # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
         #      On Linux you need to use differenct events to scroll up and scroll down
         # Scroll up
 
-        if (delta is not None and delta > 0) or (hasattr(e, "keysym") and e.keysym == "Up"):
+        if (delta is not None and delta > 0) or (
+            hasattr(e, "keysym") and e.keysym == "Up"
+        ):
             if self.scroll > 0:
                 self.scroll -= SCROLL_STEP
                 self.draw()
@@ -209,7 +228,6 @@ class Browser:
         elif self.display_list[-1][1] >= self.scroll + SCROLL_STEP:
             self.scroll += SCROLL_STEP
             self.draw()
-
 
     def draw(self):
         """Draw the display list."""
@@ -234,7 +252,6 @@ class Browser:
                 fill="blue",
             )
 
-
     def load(self, url, view_source: Optional[bool] = False):
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
@@ -244,10 +261,10 @@ class Browser:
         if view_source:
             print(body)
         else:
-            body = body.replace("<p>", "<p>\\n")
+            body = body.replace("<p>", "<p>")
             cursor_x, cursor_y = HSTEP, VSTEP
             tokens = lex(body)
-            self.text = tokens 
+            self.text = tokens
             self.display_list = Layout(tokens).display_list
             self.draw()
 
@@ -284,7 +301,6 @@ class URL:
         ).encode("utf8")
         return base_headers
 
-
     def __init__(self, url):
         """Initiate the URL class with a scheme, host, port, and path."""
         self.visited_urls = set()
@@ -318,7 +334,6 @@ class URL:
             self.scheme, url = url.split(":", 1)
             self.port = None
 
-
     def cache_response(self, url, headers, body):
         """Cache the response from the server if possible."""
         # Extract max-age from headers
@@ -336,7 +351,6 @@ class URL:
         creation_time = time.time()
         URL.cache[url] = (headers, body, time.time(), max_age)
 
-
     def get_from_cache(self, url):
         """Get the response from the cache if possible."""
         cached = URL.cache.get(url)
@@ -347,7 +361,6 @@ class URL:
             if max_age is None or (time.time() - cached_time) <= max_age:
                 return headers, body, cached_time, max_age
         return None, None, None, None
-
 
     def handle_redirect(self, response):
         """Handles the redirect from the server"""
@@ -367,17 +380,14 @@ class URL:
                 return URL(value).request(None, self.visited_urls)
         return "Error: Redirect without location header"
 
-
     def handle_local_file(self):
         """Handles the local file file:///path/to/file"""
         with open(self.path, "r", encoding="utf8") as f:
             return f.read()
 
-
     def handle_data_scheme(self):
         """Handles the data scheme data:text/html, <html>...</html>"""
         return self.path
-
 
     def create_socket(self):
         """Create a socket and connect to the server."""
@@ -392,7 +402,6 @@ class URL:
         s.connect((self.host, self.port))
         return s
 
-
     def send_request(self, s, headers):
         """Send the request to the server."""
         my_headers = (
@@ -405,14 +414,12 @@ class URL:
             my_headers = self.format_headers(headers)
         s.send(my_headers)
 
-
     def read_response(self, s):
         """Read the response from the server."""
         response = s.makefile("r", encoding="utf8", newline="\r\n")
         statusline = response.readline()
         version, status, explanation = statusline.split(" ", 2)
         return response, status
-
 
     def read_headers(self, response):
         """Read the headers from the server."""
@@ -424,7 +431,6 @@ class URL:
             header, value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
         return response_headers
-
 
     def request(self, headers: Optional[Dict[str, str]] = None, visited_urls=None):
         """Handles getting the page source from the server or local file."""
