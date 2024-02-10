@@ -65,6 +65,7 @@ class Layout:
         self.weight, self.style = "normal", "roman"
         self.size = 16
         self.superscript = False
+        self.abbr = False;
 
         for tok in tokens:
             self.token(tok)
@@ -75,6 +76,10 @@ class Layout:
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
+        elif tok.tag == 'abbr':
+            self.abbr = True
+        elif tok.tag == '/abbr':
+            self.abbr = False
         elif tok.tag == 'h1 class="title"':
             self.flush()
         elif tok.tag == "/h1":
@@ -128,8 +133,51 @@ class Layout:
 
     def word(self, word):
         """Add a word to the current line."""
+        w = 0
+        if self.abbr:
+            isLower = None  # Initially, we haven't encountered any character
+            buffer = ""
+            for c in word:
+                currentIsLower = c.islower()
+                if isLower is None:
+                    isLower = currentIsLower  # Set initial case based on the first character
 
-        font = get_font(self.size, self.weight, self.style)
+                if currentIsLower != isLower:
+                    if isLower:  # If the previous chunk was lowercase
+                        font = get_font(self.size // 2, "bold", self.style)
+                        transformed_buffer = buffer.upper()
+                    else:  # If the previous chunk was uppercase
+                        font = get_font(self.size, self.weight, self.style)
+                        transformed_buffer = buffer
+                    
+                    w = font.measure(transformed_buffer)
+                    self.line.append((self.cursor_x, transformed_buffer, font, self.superscript))
+                    self.cursor_x += w
+
+                    if c == word[-1]:
+                        self.cursor_x += font.measure(" ")
+
+                    buffer = c  
+                    isLower = currentIsLower  
+                else:
+                    buffer += c  
+            font = get_font(self.size, self.weight, self.style)
+            # Handle any remaining characters in the buffer after the loop
+            if buffer:
+                if isLower:
+                    font = get_font(self.size // 2, "bold", self.style)
+                    transformed_buffer = buffer.upper()
+                else:
+                    font = get_font(self.size, self.weight, self.style)
+                    transformed_buffer = buffer
+                    
+            w = font.measure(transformed_buffer)
+            self.line.append((self.cursor_x, transformed_buffer, font, self.superscript))
+            self.cursor_x += w + get_font(self.size, self.weight, self.style).measure(" ")
+            return
+
+        else:
+            font = get_font(self.size, self.weight, self.style)
         w = font.measure(word)
         if word == "\n":
             self.cursor_x, self.cursor_y = HSTEP, self.cursor_y + VSTEP * 2
