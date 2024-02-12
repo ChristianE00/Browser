@@ -352,6 +352,9 @@ class Browser:
             width=WIDTH,
             height=HEIGHT,
         )
+        self.entry = tkinter.Entry(self.window)
+        self.entry.bind("<Return>", self.on_submit)
+        self.text_showing = False
         self.window.bind("<Configure>", self.resize)
         self.canvas.pack(fill=tkinter.BOTH, expand=1)
         GRINNING_FACE_IMAGE = tkinter.PhotoImage(file="openmoji/1F600.png")
@@ -360,6 +363,35 @@ class Browser:
         self.scrolling = False
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<MouseWheel>", self.scrolldown)
+        self.window.bind(":", self.command_mode)
+        self.window.bind("<Escape>", self.insert_mode)
+
+
+    def command_mode(self, e):
+        if not self.text_showing:
+            self.entry.pack(fill=tkinter.X)
+            self.entry.focus_set()
+            self.text_showing = True
+
+    def insert_mode(self, e):
+        if self.text_showing:
+            self.entry.pack_forget()
+            self.text_showing = False
+            self.entry.delete(0, tkinter.END)
+
+    def on_submit(self, e):
+        if self.text_showing:
+            cmd = self.entry.get().strip().lower()
+            self.entry.pack_forget()
+            self.text_showing = False
+            self.entry.delete(0, tkinter.END)
+            if cmd == ":quit":
+                exit()
+            elif cmd == ":light blue":
+                self.canvas.config(bg="light blue")
+            elif cmd == ":default":
+                self.canvas.config(bg="white")
+
 
     def resize(self, e):
         """Resize the canvas and redraw the display list."""
