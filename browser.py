@@ -4,7 +4,7 @@ from typing import Optional, Dict
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS, FONTS = {}, {}
-
+count = 0
 def print_tree(node, indent=0):
     print(" " * indent, node)
     for child in node.children:
@@ -20,28 +20,6 @@ def get_font(size, weight, slant):
         label = tkinter.Label(font=font)
         FONTS[key] = (font, label)
     return FONTS[key][0]
-
-
-def lex(body):
-    """Show the body of the HTML page, without the tags."""
-    out = []
-    buffer = ""
-    in_tag = False
-    for c in body:
-        if c == "<":
-            in_tag = True
-            if buffer:
-                out.append(Text(buffer))
-            buffer = ""
-        elif c == ">":
-            in_tag = False
-            out.append(Tag(buffer))
-            buffer = ""
-        else:
-            buffer += c
-    if not in_tag and buffer:
-        out.append(Text(buffer))
-    return out
 
 
 def set_parameters(**params):
@@ -72,8 +50,6 @@ class Layout:
         self.abbr = False;
 
         self.recurse(tokens)
-#        for tok in tokens:
-#            self.token(tok)
         self.flush()
     def open_tag(self, tag):
         """Process an open tag and modify the state."""
@@ -116,6 +92,7 @@ class Layout:
         elif tag == "big":
             self.size -= 4
 
+
     def recurse(self, tree):
         if isinstance(tree, Text):
             for word in tree.text.split():
@@ -126,13 +103,12 @@ class Layout:
                 self.recurse(child)
             self.close_tag(tree.tag)
 
+
     def token(self, tok):
         """Process a token and add it to the display list."""
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
-
-
 
 
     def flush(self, center=False):
@@ -153,6 +129,7 @@ class Layout:
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = HSTEP
         self.line = []
+
 
     def word(self, word):
         """Add a word to the current line."""
@@ -221,14 +198,11 @@ class Layout:
                 self.word(word)
                 return
             else:            
-                #print("entered cursor_y: ", self.cursor_y)
                 self.flush()
                 self.cursor_y += font.metrics("linespace") * 1.25
                 self.cursor_x = HSTEP
         self.line.append((self.cursor_x, word, font, self.superscript))
         self.cursor_x += w + font.measure(" ")
-#-------------------------------------------------------------------WORKING HERE---------------------------------------------------------
-#-------------------------------------------------------------------WORKING HERE---------------------------------------------------------
 
 class Text:
     """A simple class to represent a text token."""
@@ -239,7 +213,6 @@ class Text:
         self.parent = parent
 
     def __repr__(self):
-#        return "Text('{}')".format(self.text)
         return repr(self.text)
 
 
@@ -247,13 +220,18 @@ class Element:
     """A simple class to represent an element token."""
 
     def __init__(self, tag, attributes, parent):
+        global count
+        count += 1
+        if count == 20:
+            if attributes is not None:
+                print("element attributes: ", attributes)
+            print("element tag: ", tag)
         self.attributes = attributes
         self.tag = tag
         self.children = []
         self.parent = parent
 
     def __repr__(self):
-#        return "Element('{}')".format(self.tag)
         return "<" + self.tag + ">"
 
 
@@ -298,8 +276,10 @@ class HTMLParser:
             if "=" in attrpair:
                 key, value = attrpair.split("=", 1)
                 attributes[key.casefold()] = value
+                print("attributes: ", attributes)
             else:
                 attributes[attrpair.casefold()] = ""
+        
         return tag, attributes
 
 
@@ -312,20 +292,16 @@ class HTMLParser:
             if c == "<":
                 in_tag = True
                 if buffer:
-#                    out.append(Text(buffer))
                     self.add_text(buffer)
                 buffer = ""
             elif c == ">":
                 in_tag = False
-#                out.append(Tag(buffer))
                 self.add_tag(buffer)
                 buffer = ""
             else:
                 buffer += c
         if not in_tag and buffer:
-#            out.append(Text(buffer))
             self.add_text(buffer)
-#        return out
         return self.finish()
     
 
@@ -364,9 +340,6 @@ class HTMLParser:
             node = Element(tag, parent, attributes)
             self.unfinished.append(node)
 
-
-#-------------------------------------------------------------------WORKING HERE---------------------------------------------------------
-#-------------------------------------------------WORKING HERE----------------------------------------------------------------------------
 
 class Browser:
     """A simple browser that can load and display a web page."""
