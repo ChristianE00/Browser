@@ -6,8 +6,13 @@ GRINNING_FACE_IMAGE = None
 EMOJIS, FONTS = {}, {}
 count = 0
 def print_tree(node, indent=0):
+    #Get the attributes if the node is an Element type
+    global count
+    count += 1
     print(" " * indent, node)
     for child in node.children:
+        if count == 25:
+            print('attributes:', node.attributes, 'node.tag:', node.tag, 'end\n')
         print_tree(child, indent + 2)
 
 def get_font(size, weight, slant):
@@ -220,12 +225,6 @@ class Element:
     """A simple class to represent an element token."""
 
     def __init__(self, tag, attributes, parent):
-        global count
-        count += 1
-        if count == 20:
-            if attributes is not None:
-                print("element attributes: ", attributes)
-            print("element tag: ", tag)
         self.attributes = attributes
         self.tag = tag
         self.children = []
@@ -276,7 +275,6 @@ class HTMLParser:
             if "=" in attrpair:
                 key, value = attrpair.split("=", 1)
                 attributes[key.casefold()] = value
-                print("attributes: ", attributes)
             else:
                 attributes[attrpair.casefold()] = ""
         
@@ -334,6 +332,7 @@ class HTMLParser:
         elif tag in self.SELF_CLOSING_TAGS:
             parent = self.unfinished[-1]
             node = Element(tag, parent, attributes)
+            # attribute added here
             parent.children.append(node)
         else:
             parent = self.unfinished[-1] if self.unfinished else None
@@ -458,10 +457,13 @@ class Browser:
         else:
             body = body.replace("<p>", "<p>")
             cursor_x, cursor_y = HSTEP, VSTEP
-#            tokens = lex(body)
-#            self.text = tokens
-#            self.display_list = Layout(tokens).display_list
             self.nodes = HTMLParser(body).parse()
+            print('nodes: ', self.nodes)
+            #NOTE: Remove
+            #for node in self.nodes:
+            #    print('hi')
+#                if len(node.attributes) > 0:
+#                    print('---------------found attributed: ', node.attributes)
             self.display_list = Layout(self.nodes).display_list
             self.draw()
 
@@ -685,9 +687,10 @@ class URL:
 
 if __name__ == "__main__":
     import sys
-
+    '''
+    body = URL(sys.argv[1]).request()
+    nodes = HTMLParser(body).parse()
+    print_tree(nodes)
+    '''
     Browser().load(URL(sys.argv[1]))
-#    body = URL(sys.argv[1]).request()
-#    nodes = HTMLParser(body).parse()
-#    print_tree(nodes)
     tkinter.mainloop()
