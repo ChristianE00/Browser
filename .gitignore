@@ -2,3 +2,4 @@ local_file.txt
 __pycache__
 *.py~
 *.un~
+*.swp

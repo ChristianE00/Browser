@@ -11,8 +11,6 @@ def print_tree(node, indent=0):
     count += 1
     print(" " * indent, node)
     for child in node.children:
-        if count == 25:
-            print('attributes:', node.attributes, 'node.tag:', node.tag, 'end\n')
         print_tree(child, indent + 2)
 
 def get_font(size, weight, slant):
@@ -286,18 +284,35 @@ class HTMLParser:
         out = []
         buffer = ""
         in_tag = False
-        for c in self.body:
-            if c == "<":
+        is_comment = False
+        count = 0
+        # So we can determine whether or not we are inside a comment
+        for i, c in enumerate(self.body):
+            if count > 0:
+                count -= 1
+                pass
+            elif c == "<":
+                if self.body[i+1:i+4] == "!--":
+                    is_comment = True
+                    count = 5
                 in_tag = True
                 if buffer:
                     self.add_text(buffer)
                 buffer = ""
             elif c == ">":
+
                 in_tag = False
-                self.add_tag(buffer)
-                buffer = ""
+                if self.body[i-2:i] == "--":
+                    is_comment = False
+
+                elif not is_comment:
+                    self.add_tag(buffer)
+                    buffer = ""
+#                else:
+
             else:
-                buffer += c
+                if not is_comment:
+                    buffer += c
         if not in_tag and buffer:
             self.add_text(buffer)
         return self.finish()
@@ -458,7 +473,6 @@ class Browser:
             body = body.replace("<p>", "<p>")
             cursor_x, cursor_y = HSTEP, VSTEP
             self.nodes = HTMLParser(body).parse()
-            print('nodes: ', self.nodes)
             #NOTE: Remove
             #for node in self.nodes:
             #    print('hi')
