@@ -1,15 +1,24 @@
-import socket, ssl, time, tkinter, platform, re, unicodedata, tkinter.font
-from typing import Optional, Dict
+import platform
+import re
+import socket
+import ssl
+import time
+import tkinter
+import tkinter.font
+import unicodedata
+from typing import Dict, Optional
 
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS, FONTS = {}, {}
-count = 0
+
+
 def print_tree(node, indent=0):
-    #Get the attributes if the node is an Element type
+    # Get the attributes if the node is an Element type
     print(" " * indent, node)
     for child in node.children:
         print_tree(child, indent + 2)
+
 
 def get_font(size, weight, slant):
     """Get a font from the cache or create it and add it to the cache."""
@@ -48,10 +57,11 @@ class Layout:
         self.weight, self.style = "normal", "roman"
         self.size = 16
         self.superscript = False
-        self.abbr = False;
+        self.abbr = False
 
         self.recurse(tokens)
         self.flush()
+
     def open_tag(self, tag):
         """Process an open tag and modify the state."""
         if tag == "abbr":
@@ -93,7 +103,6 @@ class Layout:
         elif tag == "big":
             self.size -= 4
 
-
     def recurse(self, tree):
         if isinstance(tree, Text):
             for word in tree.text.split():
@@ -104,33 +113,33 @@ class Layout:
                 self.recurse(child)
             self.close_tag(tree.tag)
 
-
     def token(self, tok):
         """Process a token and add it to the display list."""
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
 
-
     def flush(self, center=False):
         """Flush the current line to the display list."""
         if not self.line:
             return
-        max_ascent = max([font.metrics("ascent") for x, word, font, s in self.line])
+        max_ascent = max(
+            [font.metrics("ascent") for x, word, font, s in self.line])
         baseline = self.cursor_y + 1.25 * max_ascent
         last_word_width = self.line[-1][2].measure(self.line[-1][1])
         line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
         centered_x = (WIDTH - line_length) / 2
         for x, word, font, s in self.line:
             x = centered_x + x - self.line[0][0] if center else x
-            y = baseline - max_ascent if s else baseline - font.metrics("ascent") 
+            y = baseline - max_ascent if s else baseline - \
+                font.metrics("ascent")
             self.display_list.append((x, y, word, font))
 
-        max_descent = max([font.metrics("descent") for x, word, font, s in self.line])
+        max_descent = max(
+            [font.metrics("descent") for x, word, font, s in self.line])
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = HSTEP
         self.line = []
-
 
     def word(self, word):
         """Add a word to the current line."""
@@ -150,18 +159,19 @@ class Layout:
                     else:  # If the previous chunk was uppercase
                         font = get_font(self.size, self.weight, self.style)
                         transformed_buffer = buffer
-                    
+
                     w = font.measure(transformed_buffer)
-                    self.line.append((self.cursor_x, transformed_buffer, font, self.superscript))
+                    self.line.append((self.cursor_x, transformed_buffer, font,
+                                      self.superscript))
                     self.cursor_x += w
 
                     if c == word[-1]:
                         self.cursor_x += font.measure(" ")
 
-                    buffer = c  
-                    isLower = currentIsLower  
+                    buffer = c
+                    isLower = currentIsLower
                 else:
-                    buffer += c  
+                    buffer += c
             font = get_font(self.size, self.weight, self.style)
             # Handle any remaining characters in the buffer after the loop
             if buffer:
@@ -171,10 +181,12 @@ class Layout:
                 else:
                     font = get_font(self.size, self.weight, self.style)
                     transformed_buffer = buffer
-                    
+
             w = font.measure(transformed_buffer)
-            self.line.append((self.cursor_x, transformed_buffer, font, self.superscript))
-            self.cursor_x += w + get_font(self.size, self.weight, self.style).measure(" ")
+            self.line.append(
+                (self.cursor_x, transformed_buffer, font, self.superscript))
+            self.cursor_x += w + \
+                get_font(self.size, self.weight, self.style).measure(" ")
             return
 
         else:
@@ -184,13 +196,13 @@ class Layout:
             self.cursor_x, self.cursor_y = HSTEP, self.cursor_y + VSTEP * 2
             return
 
-        
         if self.cursor_x + w > WIDTH - HSTEP:
-            if "\N{SOFT HYPHEN}" in word:               
+            if "\N{SOFT HYPHEN}" in word:
                 words = word.split("\N{SOFT HYPHEN}")
                 word = ""
                 for current_word in words:
-                    if self.cursor_x + font.measure(word + "-") + font.measure(current_word) <= WIDTH - HSTEP:
+                    if self.cursor_x + font.measure(word + "-") + font.measure(
+                            current_word) <= WIDTH - HSTEP:
                         word += current_word
                     else:
                         self.word(word + "-")
@@ -198,12 +210,13 @@ class Layout:
                         word = current_word
                 self.word(word)
                 return
-            else:            
+            else:
                 self.flush()
                 self.cursor_y += font.metrics("linespace") * 1.25
                 self.cursor_x = HSTEP
         self.line.append((self.cursor_x, word, font, self.superscript))
         self.cursor_x += w + font.measure(" ")
+
 
 class Text:
     """A simple class to represent a text token."""
@@ -228,12 +241,12 @@ class Element:
 
     def __repr__(self):
         if self.attributes:
-            #print('attributes: ', self.attributes, 'tag: ', self.tag, 'children: ', self.children)
+            # print('attributes: ', self.attributes, 'tag: ', self.tag, 'children: ', self.children)
             str = "<" + self.tag
             for key, value in self.attributes.items():
                 str += f' {key}="{value}"'
             return str + ">"
-        #else:
+        # else:
         return f"<{self.tag}>"
 
 
@@ -248,24 +261,33 @@ class Tag:
 
 
 class HTMLParser:
+
     def __init__(self, body):
         self.body = body
         self.unfinished = []
-        self.SELF_CLOSING_TAGS = ["area", "base", "br", "col", "command", "embed", "hr", "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr"]
-        self.HEAD_TAGS = ["base", "link", "meta", "script", "style", "title", "basefont", "bgsoung", "noscript"]
+        self.SELF_CLOSING_TAGS = [
+            "area", "base", "br", "col", "command", "embed", "hr", "img",
+            "input", "keygen", "link", "meta", "param", "source", "track",
+            "wbr"
+        ]
+        self.HEAD_TAGS = [
+            "base", "link", "meta", "script", "style", "title", "basefont",
+            "bgsoung", "noscript"
+        ]
 
-    
     def implicit_tags(self, tag):
         while True:
             open_tags = [node.tag for node in self.unfinished]
             if open_tags == [] and tag != "html":
                 self.add_tag("html")
-            elif open_tags == ["html"] and tag not in ["head", "body", "/html"]:
+            elif open_tags == ["html"
+                               ] and tag not in ["head", "body", "/html"]:
                 if tag in self.HEAD_TAGS:
                     self.add_tag("head")
                 else:
                     self.add_tag("body")
-            elif open_tags == ["html", "head"] and tag not in ["/head"] + self.HEAD_TAGS:
+            elif open_tags == ["html", "head"
+                               ] and tag not in ["/head"] + self.HEAD_TAGS:
                 self.add_tag("/head")
             else:
                 break
@@ -282,13 +304,10 @@ class HTMLParser:
                     value = value[1:-1]
             else:
                 attributes[attrpair.casefold()] = ""
-        
         return tag, attributes
-
 
     def parse(self):
         """Show the body of the HTML page, without the tags."""
-        out = []
         buffer = ""
         in_script, in_tag, is_comment = False, False, False
         count = 0
@@ -296,15 +315,14 @@ class HTMLParser:
         for i, c in enumerate(self.body):
             if count > 0:
                 count -= 1
-                pass
             elif c == "<":
-                if self.body[i+1: i+9] == "/script>":
+                if self.body[i + 1:i + 9] == "/script>":
                     in_tag = True
                     in_script = False
                 elif in_script:
                     buffer += c
                     continue
-                elif self.body[i+1:i+4] == "!--":
+                elif self.body[i + 1:i + 4] == "!--":
                     is_comment = True
                     count = 5
                 in_tag = True
@@ -316,7 +334,7 @@ class HTMLParser:
                     buffer += c
                     continue
                 in_tag = False
-                if self.body[i-2:i] == "--":
+                if self.body[i - 2:i] == "--":
                     is_comment = False
                 elif not is_comment:
                     if buffer == "script":
@@ -331,32 +349,33 @@ class HTMLParser:
         if not in_tag and buffer:
             self.add_text(buffer)
         return self.finish()
-    
 
     def finish(self):
-        if not self.unfinished: self.implicit_tags(None)
+        if not self.unfinished:
+            self.implicit_tags(None)
         while len(self.unfinished) > 1:
             node = self.unfinished.pop()
             parent = self.unfinished[-1]
             parent.children.append(node)
         return self.unfinished.pop()
 
-
     def add_text(self, text):
-        if text.isspace(): return    
+        if text.isspace():
+            return
         self.implicit_tags(None)
         parent = self.unfinished[-1]
         node = Text(text, parent)
         parent.children.append(node)
 
-
     def add_tag(self, tag):
         bob = []
         tag, attributes = self.get_attributes(tag)
-        if tag.startswith("<!"): return
+        if tag.startswith("<!"):
+            return
         self.implicit_tags(tag)
         if tag.startswith("/"):
-            if len(self.unfinished) ==1: return
+            if len(self.unfinished) == 1:
+                return
             node = self.unfinished.pop()
             parent = self.unfinished[-1]
             parent.children.append(node)
@@ -371,17 +390,19 @@ class HTMLParser:
                 for i, unfinished_tag in enumerate(self.unfinished):
                     if unfinished_tag.tag == "p":
                         if i == len(self.unfinished) - 1:
-                            u_parent = self.unfinished[i-1]
+                            u_parent = self.unfinished[i - 1]
                             u_parent.children.append(unfinished_tag)
                             del self.unfinished[i]
                         else:
                             for j in range(len(self.unfinished) - 1, i, -1):
-                                u_parent = self.unfinished[j-1]
+                                u_parent = self.unfinished[j - 1]
                                 u_parent.children.append(self.unfinished[j])
                                 unf = self.unfinished[j]
-                                bob.append(Element(unf.tag, unf.attributes, unf.parent))
+                                bob.append(
+                                    Element(unf.tag, unf.attributes,
+                                            unf.parent))
                                 del self.unfinished[j]
-                            u_parent = self.unfinished[i-1]
+                            u_parent = self.unfinished[i - 1]
                             u_parent.children.append(unfinished_tag)
                             del self.unfinished[i]
             parent = self.unfinished[-1] if self.unfinished else None
@@ -416,7 +437,6 @@ class Browser:
         self.window.bind(":", self.command_mode)
         self.window.bind("<Escape>", self.insert_mode)
 
-
     def command_mode(self, e):
         if not self.text_showing:
             self.entry.pack(fill=tkinter.X)
@@ -442,7 +462,6 @@ class Browser:
             elif cmd == ":default":
                 self.canvas.config(bg="white")
 
-
     def resize(self, e):
         """Resize the canvas and redraw the display list."""
         global WIDTH, HEIGHT
@@ -451,21 +470,16 @@ class Browser:
     def scrolldown(self, e):
         """Scroll down by SCROLL_STEP pixels."""
         # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
-        delta = (
-            e.delta / 120
-            if hasattr(e, "delta")
-            and e.delta is not None
-            and platform.system() == "Darwin"
-            else e.delta if hasattr(e, "delta") else None
-        )
+        delta = (e.delta / 120 if hasattr(e, "delta") and e.delta is not None
+                 and platform.system() == "Darwin" else
+                 e.delta if hasattr(e, "delta") else None)
         # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
         # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
         #      On Linux you need to use differenct events to scroll up and scroll down
         # Scroll up
 
-        if (delta is not None and delta > 0) or (
-            hasattr(e, "keysym") and e.keysym == "Up"
-        ):
+        if (delta is not None and delta > 0) or (hasattr(e, "keysym")
+                                                 and e.keysym == "Up"):
             if self.scroll > 0:
                 self.scroll -= SCROLL_STEP
                 self.draw()
@@ -485,15 +499,19 @@ class Browser:
             if c in EMOJIS:
                 self.canvas.create_image(x, y - self.scroll, image=EMOJIS[c])
                 continue
-            self.canvas.create_text(x, y - self.scroll, text=c, font=d, anchor="nw")
+            self.canvas.create_text(x,
+                                    y - self.scroll,
+                                    text=c,
+                                    font=d,
+                                    anchor="nw")
 
         if self.display_list[-1][1] > HEIGHT:
             self.canvas.create_rectangle(
                 WIDTH - 8,
                 self.scroll / self.display_list[-1][1] * HEIGHT,
                 WIDTH,
-                HEIGHT / self.display_list[-1][1] * HEIGHT
-                + (self.scroll / self.display_list[-1][1]) * HEIGHT,
+                HEIGHT / self.display_list[-1][1] * HEIGHT +
+                (self.scroll / self.display_list[-1][1]) * HEIGHT,
                 fill="blue",
             )
 
@@ -509,11 +527,11 @@ class Browser:
             body = body.replace("<p>", "<p>")
             cursor_x, cursor_y = HSTEP, VSTEP
             self.nodes = HTMLParser(body).parse()
-            #NOTE: Remove
-            #for node in self.nodes:
+            # NOTE: Remove
+            # for node in self.nodes:
             #    print('hi')
-#                if len(node.attributes) > 0:
-#                    print('---------------found attributed: ', node.attributes)
+            #                if len(node.attributes) > 0:
+            #                    print('---------------found attributed: ', node.attributes)
             self.display_list = Layout(self.nodes).display_list
             self.draw()
 
@@ -525,7 +543,6 @@ class URL:
 
     def format_headers(self, headers):
         """Format the given header dictionary into a string."""
-        user_agent_found, connection_found = False, False
         user_agent = "User-Agent: SquidWeb\r\n"
         connection = "Connection: close\r\n"
         remove_list = []
@@ -540,14 +557,12 @@ class URL:
         for key in remove_list:
             del headers[key]
 
-        headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
+        headers_text = "\r\n".join("{}: {}".format(k, v)
+                                   for k, v in headers.items())
         headers_text = "\r\n" + user_agent + connection + headers_text
-        base_headers = (
-            "GET {} HTTP/1.1\r\n".format(self.path)
-            + "Host: {}".format(self.host)
-            + headers_text
-            + "\r\n\r\n"
-        ).encode("utf8")
+        base_headers = ("GET {} HTTP/1.1\r\n".format(self.path) +
+                        "Host: {}".format(self.host) + headers_text +
+                        "\r\n\r\n").encode("utf8")
         return base_headers
 
     def __init__(self, url):
@@ -597,7 +612,6 @@ class URL:
                     except ValueError:
                         pass
         # Store response in cache with current time and max-age
-        creation_time = time.time()
         URL.cache[url] = (headers, body, time.time(), max_age)
 
     def get_from_cache(self, url):
@@ -620,9 +634,8 @@ class URL:
             header, value = line.split(":", 1)
             if header.casefold() == "location":
                 if "://" not in value:
-                    value = (
-                        self.scheme.strip() + "://" + self.host.strip() + value.strip()
-                    )
+                    value = (self.scheme.strip() + "://" + self.host.strip() +
+                             value.strip())
                 if value in self.visited_urls:
                     return "Error: Redirect loop detected"
                 self.visited_urls.add(value.strip())
@@ -654,11 +667,9 @@ class URL:
     def send_request(self, s, headers):
         """Send the request to the server."""
         my_headers = (
-            "GET {} HTTP/1.1\r\n".format(self.path)
-            + "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(
-                self.host
-            )
-        ).encode("utf8")
+            "GET {} HTTP/1.1\r\n".format(self.path) +
+            "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".
+            format(self.host)).encode("utf8")
         if headers:
             my_headers = self.format_headers(headers)
         s.send(my_headers)
@@ -681,17 +692,21 @@ class URL:
             response_headers[header.casefold()] = value.strip()
         return response_headers
 
-    def request(self, headers: Optional[Dict[str, str]] = None, visited_urls=None):
+    def request(self,
+                headers: Optional[Dict[str, str]] = None,
+                visited_urls=None):
         """Handles getting the page source from the server or local file."""
         if self.scheme == "file":
             return self.handle_local_file()
         elif self.scheme == "data":
             return self.handle_data_scheme()
         elif self.scheme == "https" or self.scheme == "http":
-            url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
+            url = self.scheme.strip() + "://" + self.host.strip(
+            ) + self.path.strip()
 
             # Check if url is in cache, use cached response if it is
-            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(url)
+            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(
+                url)
             if cached_body:
                 return cached_body
 
@@ -713,11 +728,8 @@ class URL:
             assert "content-encoding" not in response_headers
             encoding_response = response_headers.get("content-type", "utf8")
             encoding_position = encoding_response.find("charset=")
-            encoding = (
-                encoding_response[encoding_position + 8 :]
-                if encoding_position != -1
-                else "utf8"
-            )
+            encoding = (encoding_response[encoding_position + 8:]
+                        if encoding_position != -1 else "utf8")
 
             # check if response is cacheable and cache it if it is
             if "cache-control" in response_headers:
