@@ -7,8 +7,6 @@ EMOJIS, FONTS = {}, {}
 count = 0
 def print_tree(node, indent=0):
     #Get the attributes if the node is an Element type
-    global count
-    count += 1
     print(" " * indent, node)
     for child in node.children:
         print_tree(child, indent + 2)
@@ -229,7 +227,14 @@ class Element:
         self.parent = parent
 
     def __repr__(self):
-        return "<" + self.tag + ">"
+        if self.attributes:
+            #print('attributes: ', self.attributes, 'tag: ', self.tag, 'children: ', self.children)
+            str = "<" + self.tag
+            for key, value in self.attributes.items():
+                str += f' {key}="{value}"'
+            return str + ">"
+        #else:
+        return f"<{self.tag}>"
 
 
 class Tag:
@@ -273,6 +278,8 @@ class HTMLParser:
             if "=" in attrpair:
                 key, value = attrpair.split("=", 1)
                 attributes[key.casefold()] = value
+                if len(value) > 2 and value[0] in ["", "\""]:
+                    value = value[1:-1]
             else:
                 attributes[attrpair.casefold()] = ""
         
@@ -356,7 +363,7 @@ class HTMLParser:
         elif tag in self.SELF_CLOSING_TAGS:
 
             parent = self.unfinished[-1]
-            node = Element(tag, parent, attributes)
+            node = Element(tag, attributes, parent)
             # attribute added here
             parent.children.append(node)
         else:
@@ -378,7 +385,7 @@ class HTMLParser:
                             u_parent.children.append(unfinished_tag)
                             del self.unfinished[i]
             parent = self.unfinished[-1] if self.unfinished else None
-            node = Element(tag, parent, attributes)
+            node = Element(tag, attributes, parent)
             self.unfinished.append(node)
             while bob:
                 self.unfinished.append(bob.pop())
