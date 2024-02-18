@@ -283,8 +283,7 @@ class HTMLParser:
         """Show the body of the HTML page, without the tags."""
         out = []
         buffer = ""
-        in_tag = False
-        is_comment = False
+        in_script, in_tag, is_comment = False, False, False
         count = 0
         # So we can determine whether or not we are inside a comment
         for i, c in enumerate(self.body):
@@ -292,7 +291,13 @@ class HTMLParser:
                 count -= 1
                 pass
             elif c == "<":
-                if self.body[i+1:i+4] == "!--":
+                if self.body[i+1: i+9] == "/script>":
+                    in_tag = True
+                    in_script = False
+                elif in_script:
+                    buffer += c
+                    continue
+                elif self.body[i+1:i+4] == "!--":
                     is_comment = True
                     count = 5
                 in_tag = True
@@ -300,16 +305,19 @@ class HTMLParser:
                     self.add_text(buffer)
                 buffer = ""
             elif c == ">":
-
+                if in_script:
+                    buffer += c
+                    continue
                 in_tag = False
                 if self.body[i-2:i] == "--":
                     is_comment = False
-
                 elif not is_comment:
+                    if buffer == "script":
+                        in_script = True
+                    elif buffer == "/script":
+                        in_script = False
                     self.add_tag(buffer)
                     buffer = ""
-#                else:
-
             else:
                 if not is_comment:
                     buffer += c
