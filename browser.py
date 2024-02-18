@@ -12,9 +12,8 @@ WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS, FONTS = {}, {}
 
-
 def print_tree(node, indent=0):
-    # Get the attributes if the node is an Element type
+    """Print the tree structure of the HTML."""
     print(" " * indent, node)
     for child in node.children:
         print_tree(child, indent + 2)
@@ -84,7 +83,7 @@ class Layout:
 
     def close_tag(self, tag):
 
-        if tag == 'abbr':
+        if tag == "abbr":
             self.abbr = False
         elif tag == "h1":
             self.flush(True)
@@ -123,20 +122,17 @@ class Layout:
         """Flush the current line to the display list."""
         if not self.line:
             return
-        max_ascent = max(
-            [font.metrics("ascent") for x, word, font, s in self.line])
+        max_ascent = max([font.metrics("ascent") for x, word, font, s in self.line])
         baseline = self.cursor_y + 1.25 * max_ascent
         last_word_width = self.line[-1][2].measure(self.line[-1][1])
         line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
         centered_x = (WIDTH - line_length) / 2
         for x, word, font, s in self.line:
             x = centered_x + x - self.line[0][0] if center else x
-            y = baseline - max_ascent if s else baseline - \
-                font.metrics("ascent")
+            y = baseline - max_ascent if s else baseline - font.metrics("ascent")
             self.display_list.append((x, y, word, font))
 
-        max_descent = max(
-            [font.metrics("descent") for x, word, font, s in self.line])
+        max_descent = max([font.metrics("descent") for x, word, font, s in self.line])
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = HSTEP
         self.line = []
@@ -150,7 +146,9 @@ class Layout:
             for c in word:
                 currentIsLower = c.islower()
                 if isLower is None:
-                    isLower = currentIsLower  # Set initial case based on the first character
+                    isLower = (
+                        currentIsLower  # Set initial case based on the first character
+                    )
 
                 if currentIsLower != isLower:
                     if isLower:  # If the previous chunk was lowercase
@@ -161,8 +159,9 @@ class Layout:
                         transformed_buffer = buffer
 
                     w = font.measure(transformed_buffer)
-                    self.line.append((self.cursor_x, transformed_buffer, font,
-                                      self.superscript))
+                    self.line.append(
+                        (self.cursor_x, transformed_buffer, font, self.superscript)
+                    )
                     self.cursor_x += w
 
                     if c == word[-1]:
@@ -184,9 +183,11 @@ class Layout:
 
             w = font.measure(transformed_buffer)
             self.line.append(
-                (self.cursor_x, transformed_buffer, font, self.superscript))
-            self.cursor_x += w + \
-                get_font(self.size, self.weight, self.style).measure(" ")
+                (self.cursor_x, transformed_buffer, font, self.superscript)
+            )
+            self.cursor_x += w + get_font(self.size, self.weight, self.style).measure(
+                " "
+            )
             return
 
         else:
@@ -201,8 +202,12 @@ class Layout:
                 words = word.split("\N{SOFT HYPHEN}")
                 word = ""
                 for current_word in words:
-                    if self.cursor_x + font.measure(word + "-") + font.measure(
-                            current_word) <= WIDTH - HSTEP:
+                    if (
+                        self.cursor_x
+                        + font.measure(word + "-")
+                        + font.measure(current_word)
+                        <= WIDTH - HSTEP
+                    ):
                         word += current_word
                     else:
                         self.word(word + "-")
@@ -241,7 +246,6 @@ class Element:
 
     def __repr__(self):
         if self.attributes:
-            # print('attributes: ', self.attributes, 'tag: ', self.tag, 'children: ', self.children)
             str = "<" + self.tag
             for key, value in self.attributes.items():
                 str += f' {key}="{value}"'
@@ -266,13 +270,33 @@ class HTMLParser:
         self.body = body
         self.unfinished = []
         self.SELF_CLOSING_TAGS = [
-            "area", "base", "br", "col", "command", "embed", "hr", "img",
-            "input", "keygen", "link", "meta", "param", "source", "track",
-            "wbr"
+            "area",
+            "base",
+            "br",
+            "col",
+            "command",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "keygen",
+            "link",
+            "meta",
+            "param",
+            "source",
+            "track",
+            "wbr",
         ]
         self.HEAD_TAGS = [
-            "base", "link", "meta", "script", "style", "title", "basefont",
-            "bgsoung", "noscript"
+            "base",
+            "link",
+            "meta",
+            "script",
+            "style",
+            "title",
+            "basefont",
+            "bgsoung",
+            "noscript",
         ]
 
     def implicit_tags(self, tag):
@@ -280,27 +304,55 @@ class HTMLParser:
             open_tags = [node.tag for node in self.unfinished]
             if open_tags == [] and tag != "html":
                 self.add_tag("html")
-            elif open_tags == ["html"
-                               ] and tag not in ["head", "body", "/html"]:
+            elif open_tags == ["html"] and tag not in ["head", "body", "/html"]:
                 if tag in self.HEAD_TAGS:
                     self.add_tag("head")
                 else:
                     self.add_tag("body")
-            elif open_tags == ["html", "head"
-                               ] and tag not in ["/head"] + self.HEAD_TAGS:
+            elif (
+                open_tags == ["html", "head"] and tag not in ["/head"] + self.HEAD_TAGS
+            ):
                 self.add_tag("/head")
             else:
                 break
 
     def get_attributes(self, text):
-        parts = text.split()
-        tag = parts[0].casefold() if len(parts) > 0 else ""
+        """Return the tag and attributes from a string."""
+
+        single_quote, double_quote, swap = False, False, False
+        parts = []
+        current = ""
         attributes = {}
+
+        for c in text:
+            if c == "'" and not double_quote:
+                single_quote = not single_quote
+                if not single_quote:
+                    swap = True
+            elif c == '"' and not single_quote:
+                double_quote = not double_quote
+                if not double_quote:
+                    swap = True
+            elif c == " " and not single_quote and not double_quote or swap:
+                swap = False
+                parts.append(current)
+                current = ""
+                # Edge case: If there is no space between the end of the quote and the next attribute
+                if c != " ":
+                    current += c
+            else:
+                current += c
+
+        if current:
+            parts.append(current)
+        tag = parts[0].casefold() if len(parts) > 0 else ""
         for attrpair in parts[1:]:
-            if "=" in attrpair:
-                key, value = attrpair.split("=", 1)
+            # attrpair contains c = '=' where c-1 != " " and i+1 != " "
+            if re.search(r"[^ ]=[^ ]", attrpair):
+                # Split the attribute into key and value on c = '=' where c-1 != " " and i+1 != " "
+                key, value = re.split(r"(?<=[^ ])=(?=[^ ])", attrpair, 1)
                 attributes[key.casefold()] = value
-                if len(value) > 2 and value[0] in ["", "\""]:
+                if len(value) > 2 and value[0] in ["", '"']:
                     value = value[1:-1]
             else:
                 attributes[attrpair.casefold()] = ""
@@ -309,32 +361,37 @@ class HTMLParser:
     def parse(self):
         """Show the body of the HTML page, without the tags."""
         buffer = ""
-        in_script, in_tag, is_comment = False, False, False
+        in_script, in_tag, is_comment, double_in_quote, single_in_quote = False, False, False, False, False
         count = 0
+
         # So we can determine whether or not we are inside a comment
         for i, c in enumerate(self.body):
+            if c == '"' and not single_in_quote and in_tag:
+                double_in_quote = not double_in_quote
+            if c == "'" and not double_in_quote and in_tag:
+                single_in_quote = not single_in_quote
             if count > 0:
                 count -= 1
-            elif c == "<":
-                if self.body[i + 1:i + 9] == "/script>":
+            elif c == "<" and not single_in_quote and not double_in_quote:
+                if self.body[i + 1 : i + 9] == "/script>":
                     in_tag = True
                     in_script = False
                 elif in_script:
                     buffer += c
                     continue
-                elif self.body[i + 1:i + 4] == "!--":
+                elif self.body[i + 1 : i + 4] == "!--":
                     is_comment = True
                     count = 5
                 in_tag = True
                 if buffer:
                     self.add_text(buffer)
                 buffer = ""
-            elif c == ">":
+            elif c == ">" and not single_in_quote and not double_in_quote:
                 if in_script:
                     buffer += c
                     continue
                 in_tag = False
-                if self.body[i - 2:i] == "--":
+                if self.body[i - 2 : i] == "--":
                     is_comment = False
                 elif not is_comment:
                     if buffer == "script":
@@ -398,9 +455,7 @@ class HTMLParser:
                                 u_parent = self.unfinished[j - 1]
                                 u_parent.children.append(self.unfinished[j])
                                 unf = self.unfinished[j]
-                                bob.append(
-                                    Element(unf.tag, unf.attributes,
-                                            unf.parent))
+                                bob.append(Element(unf.tag, unf.attributes, unf.parent))
                                 del self.unfinished[j]
                             u_parent = self.unfinished[i - 1]
                             u_parent.children.append(unfinished_tag)
@@ -470,16 +525,21 @@ class Browser:
     def scrolldown(self, e):
         """Scroll down by SCROLL_STEP pixels."""
         # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
-        delta = (e.delta / 120 if hasattr(e, "delta") and e.delta is not None
-                 and platform.system() == "Darwin" else
-                 e.delta if hasattr(e, "delta") else None)
+        delta = (
+            e.delta / 120
+            if hasattr(e, "delta")
+            and e.delta is not None
+            and platform.system() == "Darwin"
+            else e.delta if hasattr(e, "delta") else None
+        )
         # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
         # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
         #      On Linux you need to use differenct events to scroll up and scroll down
         # Scroll up
 
-        if (delta is not None and delta > 0) or (hasattr(e, "keysym")
-                                                 and e.keysym == "Up"):
+        if (delta is not None and delta > 0) or (
+            hasattr(e, "keysym") and e.keysym == "Up"
+        ):
             if self.scroll > 0:
                 self.scroll -= SCROLL_STEP
                 self.draw()
@@ -499,19 +559,15 @@ class Browser:
             if c in EMOJIS:
                 self.canvas.create_image(x, y - self.scroll, image=EMOJIS[c])
                 continue
-            self.canvas.create_text(x,
-                                    y - self.scroll,
-                                    text=c,
-                                    font=d,
-                                    anchor="nw")
+            self.canvas.create_text(x, y - self.scroll, text=c, font=d, anchor="nw")
 
         if self.display_list[-1][1] > HEIGHT:
             self.canvas.create_rectangle(
                 WIDTH - 8,
                 self.scroll / self.display_list[-1][1] * HEIGHT,
                 WIDTH,
-                HEIGHT / self.display_list[-1][1] * HEIGHT +
-                (self.scroll / self.display_list[-1][1]) * HEIGHT,
+                HEIGHT / self.display_list[-1][1] * HEIGHT
+                + (self.scroll / self.display_list[-1][1]) * HEIGHT,
                 fill="blue",
             )
 
@@ -557,12 +613,14 @@ class URL:
         for key in remove_list:
             del headers[key]
 
-        headers_text = "\r\n".join("{}: {}".format(k, v)
-                                   for k, v in headers.items())
+        headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
         headers_text = "\r\n" + user_agent + connection + headers_text
-        base_headers = ("GET {} HTTP/1.1\r\n".format(self.path) +
-                        "Host: {}".format(self.host) + headers_text +
-                        "\r\n\r\n").encode("utf8")
+        base_headers = (
+            "GET {} HTTP/1.1\r\n".format(self.path)
+            + "Host: {}".format(self.host)
+            + headers_text
+            + "\r\n\r\n"
+        ).encode("utf8")
         return base_headers
 
     def __init__(self, url):
@@ -634,8 +692,9 @@ class URL:
             header, value = line.split(":", 1)
             if header.casefold() == "location":
                 if "://" not in value:
-                    value = (self.scheme.strip() + "://" + self.host.strip() +
-                             value.strip())
+                    value = (
+                        self.scheme.strip() + "://" + self.host.strip() + value.strip()
+                    )
                 if value in self.visited_urls:
                     return "Error: Redirect loop detected"
                 self.visited_urls.add(value.strip())
@@ -667,9 +726,11 @@ class URL:
     def send_request(self, s, headers):
         """Send the request to the server."""
         my_headers = (
-            "GET {} HTTP/1.1\r\n".format(self.path) +
-            "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".
-            format(self.host)).encode("utf8")
+            "GET {} HTTP/1.1\r\n".format(self.path)
+            + "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(
+                self.host
+            )
+        ).encode("utf8")
         if headers:
             my_headers = self.format_headers(headers)
         s.send(my_headers)
@@ -692,21 +753,17 @@ class URL:
             response_headers[header.casefold()] = value.strip()
         return response_headers
 
-    def request(self,
-                headers: Optional[Dict[str, str]] = None,
-                visited_urls=None):
+    def request(self, headers: Optional[Dict[str, str]] = None, visited_urls=None):
         """Handles getting the page source from the server or local file."""
         if self.scheme == "file":
             return self.handle_local_file()
         elif self.scheme == "data":
             return self.handle_data_scheme()
         elif self.scheme == "https" or self.scheme == "http":
-            url = self.scheme.strip() + "://" + self.host.strip(
-            ) + self.path.strip()
+            url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
 
             # Check if url is in cache, use cached response if it is
-            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(
-                url)
+            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(url)
             if cached_body:
                 return cached_body
 
@@ -728,8 +785,11 @@ class URL:
             assert "content-encoding" not in response_headers
             encoding_response = response_headers.get("content-type", "utf8")
             encoding_position = encoding_response.find("charset=")
-            encoding = (encoding_response[encoding_position + 8:]
-                        if encoding_position != -1 else "utf8")
+            encoding = (
+                encoding_response[encoding_position + 8 :]
+                if encoding_position != -1
+                else "utf8"
+            )
 
             # check if response is cacheable and cache it if it is
             if "cache-control" in response_headers:
@@ -749,10 +809,11 @@ class URL:
 
 if __name__ == "__main__":
     import sys
-    '''
+
+    """
     body = URL(sys.argv[1]).request()
     nodes = HTMLParser(body).parse()
     print_tree(nodes)
-    '''
+    """
     Browser().load(URL(sys.argv[1]))
     tkinter.mainloop()
