@@ -336,6 +336,7 @@ class HTMLParser:
 
 
     def add_tag(self, tag):
+        bob = []
         tag, attributes = self.get_attributes(tag)
         if tag.startswith("<!"): return
         self.implicit_tags(tag)
@@ -345,14 +346,34 @@ class HTMLParser:
             parent = self.unfinished[-1]
             parent.children.append(node)
         elif tag in self.SELF_CLOSING_TAGS:
+
             parent = self.unfinished[-1]
             node = Element(tag, parent, attributes)
             # attribute added here
             parent.children.append(node)
         else:
+            if tag == "p":
+                for i, unfinished_tag in enumerate(self.unfinished):
+                    if unfinished_tag.tag == "p":
+                        if i == len(self.unfinished) - 1:
+                            u_parent = self.unfinished[i-1]
+                            u_parent.children.append(unfinished_tag)
+                            del self.unfinished[i]
+                        else:
+                            for j in range(len(self.unfinished) - 1, i, -1):
+                                u_parent = self.unfinished[j-1]
+                                u_parent.children.append(self.unfinished[j])
+                                unf = self.unfinished[j]
+                                bob.append(Element(unf.tag, unf.attributes, unf.parent))
+                                del self.unfinished[j]
+                            u_parent = self.unfinished[i-1]
+                            u_parent.children.append(unfinished_tag)
+                            del self.unfinished[i]
             parent = self.unfinished[-1] if self.unfinished else None
             node = Element(tag, parent, attributes)
             self.unfinished.append(node)
+            while bob:
+                self.unfinished.append(bob.pop())
 
 
 class Browser:
