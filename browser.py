@@ -11,6 +11,15 @@ from typing import Dict, Optional
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS, FONTS = {}, {}
+BLOCK_ELEMENTS = [
+    "html", "body", "article", "section", "nav", "aside",
+    "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
+    "footer", "address", "p", "hr", "pre", "blockquote",
+    "ol", "ul", "menu", "li", "dl", "dt", "dd", "figure",
+    "figcaption", "main", "div", "table", "form", "fieldset",
+    "legend", "details", "summary"
+]
+
 
 def print_tree(node, indent=0):
     """Print the tree structure of the HTML."""
@@ -46,20 +55,132 @@ def set_parameters(**params):
         SCROLL_STEP = params["SCROLL_STEP"]
 
 
-class Layout:
+def paint_tree(layout_object, display_list):
+    display_list.extend(layout_object.paint())
+    for child in layout_object.children:
+        paint_tree(child, display_list)
+
+
+class DocumentLayout:
+    def __init__(self, node):
+        self.node = node
+        self.parent = None
+        self.children, self.display_list = [], []
+        self.x, self.y, self.width, self.height = None, None, None, None
+
+    def paint(self):
+        return []
+
+    def layout(self):
+        child = BlockLayout(self.node, self, None)
+        self.children.append(child)
+        self.width = WIDTH - 2*HSTEP
+        self.x, self.y = HSTEP, VSTEP
+        child.layout()
+#        self.display_list = child.display_list
+        self.height = child.height
+
+
+class DrawText:
+    def __init__(self, x1, y1, text, font):
+        print("x1: ", x1)
+        self.top = y1
+        self.left = x1
+        self.text = text
+        self.font = font
+        self.bottom = y1 + font.metrics("linespace")
+
+    def execute(self, scroll, canvas):
+        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw")
+
+
+class DrawRect:
+    def __init__(self, x1, y1, x2, y2, color):
+        self.top = y1
+        self.left = x1
+        self.bottom = y2
+        self.right = x2
+        self.color = color
+
+    def execute(self, scroll, canvas):
+        canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
+
+
+
+class BlockLayout:
     """A class that takes a list of tokens and converts it to a display list."""
 
-    def __init__(self, tokens):
-        self.display_list = []
-        self.line = []
-        self.cursor_x, self.cursor_y = HSTEP, VSTEP
-        self.weight, self.style = "normal", "roman"
-        self.size = 16
+    def __init__(self, node, parent, previous):
+        self.node = node
+        self.parent = parent
+        self.previous = previous
+        self.children = []
+        self.x, self.y, self.width, self.height = 0, 0, 0, 0
+
+    def paint(self):
+        cmds = []
+        # Must be called before any text is drawn because it got to be behind the text
+        if isinstance(self.node, Element) and self.node.tag == "pre":
+            x2, y2, = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, "gray")
+            cmds.append(rect)
+        if self.layout_mode() == "inline":
+            for x, y, word, font in self.display_list:
+                cmds.append(DrawText(x, y, word, font))
+
+        return cmds
+
+
+    def layout_mode(self):
+        if isinstance(self.node, Text):
+            return "inline"
+        elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
+            return "block"
+        elif self.node.children:
+            return "inline"
+        else:
+            return "block"
+
+    def layout_intermediate(self):
+        previous = None
+        for child in self.node.children:
+            next = BlockLayout(child, self, previous)
+            self.children.append(next)
+            previous = next
+
+    def layout(self):
+        self.x = self.parent.x
+        self.width = self.parent.width
         self.superscript = False
         self.abbr = False
+        self.display_list = []
+        mode = self.layout_mode()
+        if self.previous:
+            self.y = self.previous.y + self.previous.height
+        else:
+            self.y = self.parent.y
+        if mode == "block":
+            previous = None
+            for child in self.node.children:
+                next = BlockLayout(child, self, previous)
+                self.children.append(next)
+                previous = next
+        else:
+            self.cursor_x, self.cursor_y = 0, 0 
+            self.weight, self.style = "normal", "roman"
+            self.size = 16
+            self.line = []
+            self.recurse(self.node)
+            self.flush()
 
-        self.recurse(tokens)
-        self.flush()
+        for child in self.children:
+            child.layout()
+        for child in self.children:
+            self.display_list.extend(child.display_list)
+        if mode == "block":
+            self.height = sum([child.height for child in self.children])
+        else:
+            self.cursor_y
 
     def open_tag(self, tag):
         """Process an open tag and modify the state."""
@@ -122,19 +243,23 @@ class Layout:
         """Flush the current line to the display list."""
         if not self.line:
             return
-        max_ascent = max([font.metrics("ascent") for x, word, font, s in self.line])
+        # NOTE: Might need to change x calculation
+        max_ascent = max([font.metrics("ascent")
+                         for x, word, font, s in self.line])
         baseline = self.cursor_y + 1.25 * max_ascent
         last_word_width = self.line[-1][2].measure(self.line[-1][1])
         line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
         centered_x = (WIDTH - line_length) / 2
-        for x, word, font, s in self.line:
-            x = centered_x + x - self.line[0][0] if center else x
-            y = baseline - max_ascent if s else baseline - font.metrics("ascent")
+        for rel_x, word, font, s in self.line:
+            x = centered_x + (rel_x + self.x) - self.line[0][0] if center else rel_x + self.x
+            y = self.y + baseline - max_ascent if s else self.y + baseline - \
+                font.metrics("ascent")
             self.display_list.append((x, y, word, font))
 
-        max_descent = max([font.metrics("descent") for x, word, font, s in self.line])
+        max_descent = max([font.metrics("descent")
+                          for x, word, font, s in self.line])
         self.cursor_y = baseline + 1.25 * max_descent
-        self.cursor_x = HSTEP
+        self.cursor_x = 0
         self.line = []
 
     def word(self, word):
@@ -197,7 +322,7 @@ class Layout:
             self.cursor_x, self.cursor_y = HSTEP, self.cursor_y + VSTEP * 2
             return
 
-        if self.cursor_x + w > WIDTH - HSTEP:
+        if self.cursor_x + w > self.width:
             if "\N{SOFT HYPHEN}" in word:
                 words = word.split("\N{SOFT HYPHEN}")
                 word = ""
@@ -310,7 +435,8 @@ class HTMLParser:
                 else:
                     self.add_tag("body")
             elif (
-                open_tags == ["html", "head"] and tag not in ["/head"] + self.HEAD_TAGS
+                open_tags == ["html", "head"] and tag not in [
+                    "/head"] + self.HEAD_TAGS
             ):
                 self.add_tag("/head")
             else:
@@ -373,13 +499,13 @@ class HTMLParser:
             if count > 0:
                 count -= 1
             elif c == "<" and not single_in_quote and not double_in_quote:
-                if self.body[i + 1 : i + 9] == "/script>":
+                if self.body[i + 1: i + 9] == "/script>":
                     in_tag = True
                     in_script = False
                 elif in_script:
                     buffer += c
                     continue
-                elif self.body[i + 1 : i + 4] == "!--":
+                elif self.body[i + 1: i + 4] == "!--":
                     is_comment = True
                     count = 5
                 in_tag = True
@@ -391,7 +517,7 @@ class HTMLParser:
                     buffer += c
                     continue
                 in_tag = False
-                if self.body[i - 2 : i] == "--":
+                if self.body[i - 2: i] == "--":
                     is_comment = False
                 elif not is_comment:
                     if buffer == "script":
@@ -455,7 +581,8 @@ class HTMLParser:
                                 u_parent = self.unfinished[j - 1]
                                 u_parent.children.append(self.unfinished[j])
                                 unf = self.unfinished[j]
-                                bob.append(Element(unf.tag, unf.attributes, unf.parent))
+                                bob.append(
+                                    Element(unf.tag, unf.attributes, unf.parent))
                                 del self.unfinished[j]
                             u_parent = self.unfinished[i - 1]
                             u_parent.children.append(unfinished_tag)
@@ -482,7 +609,7 @@ class Browser:
         self.entry.bind("<Return>", self.on_submit)
         self.text_showing = False
         self.window.bind("<Configure>", self.resize)
-        self.canvas.pack(fill=tkinter.BOTH, expand=1)
+        self.canvas.pack(fill=tkinter.BOTH, expand=0)
         GRINNING_FACE_IMAGE = tkinter.PhotoImage(file="openmoji/1F600.png")
         EMOJIS["\N{GRINNING FACE}"] = GRINNING_FACE_IMAGE
         self.scroll, self.last_y = 0, 0
@@ -525,6 +652,7 @@ class Browser:
     def scrolldown(self, e):
         """Scroll down by SCROLL_STEP pixels."""
         # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
+        '''
         delta = (
             e.delta / 120
             if hasattr(e, "delta")
@@ -543,33 +671,25 @@ class Browser:
             if self.scroll > 0:
                 self.scroll -= SCROLL_STEP
                 self.draw()
-
-        elif self.display_list[-1][1] >= self.scroll + SCROLL_STEP:
-            self.scroll += SCROLL_STEP
-            self.draw()
+        else:
+        '''
+        max_y = max(self.document.height + 2*VSTEP - HEIGHT, 0)
+        self.scroll = min(self.scroll + SCROLL_STEP, max_y)
+        self.draw()
 
     def draw(self):
-        """Draw the display list."""
         self.canvas.delete("all")
-        for x, y, c, d in self.display_list:
-            if y > self.scroll + HEIGHT:
+        for cmd in self.display_list:
+#            print("cmd: ", cmd, "scroll:", self.scroll, "height:", HEIGHT)
+            if cmd.top > self.scroll + HEIGHT: 
+#                print("skipping command")
                 continue
-            if y + VSTEP < self.scroll:
+            if cmd.bottom < self.scroll:
+#                print("skipping command")
                 continue
-            if c in EMOJIS:
-                self.canvas.create_image(x, y - self.scroll, image=EMOJIS[c])
-                continue
-            self.canvas.create_text(x, y - self.scroll, text=c, font=d, anchor="nw")
+#            print("executing command")
+            cmd.execute(self.scroll, self.canvas)
 
-        if self.display_list[-1][1] > HEIGHT:
-            self.canvas.create_rectangle(
-                WIDTH - 8,
-                self.scroll / self.display_list[-1][1] * HEIGHT,
-                WIDTH,
-                HEIGHT / self.display_list[-1][1] * HEIGHT
-                + (self.scroll / self.display_list[-1][1]) * HEIGHT,
-                fill="blue",
-            )
 
     def load(self, url, view_source: Optional[bool] = False):
         """Load the given URL and convert text tags to character tags."""
@@ -583,12 +703,11 @@ class Browser:
             body = body.replace("<p>", "<p>")
             cursor_x, cursor_y = HSTEP, VSTEP
             self.nodes = HTMLParser(body).parse()
-            # NOTE: Remove
-            # for node in self.nodes:
-            #    print('hi')
-            #                if len(node.attributes) > 0:
-            #                    print('---------------found attributed: ', node.attributes)
-            self.display_list = Layout(self.nodes).display_list
+            self.document = DocumentLayout(self.nodes)
+            self.document.layout()
+            #self.display_list = self.document.display_list
+            self.display_list = []
+            paint_tree(self.document, self.display_list)
             self.draw()
 
 
@@ -613,7 +732,8 @@ class URL:
         for key in remove_list:
             del headers[key]
 
-        headers_text = "\r\n".join("{}: {}".format(k, v) for k, v in headers.items())
+        headers_text = "\r\n".join("{}: {}".format(k, v)
+                                   for k, v in headers.items())
         headers_text = "\r\n" + user_agent + connection + headers_text
         base_headers = (
             "GET {} HTTP/1.1\r\n".format(self.path)
@@ -763,7 +883,8 @@ class URL:
             url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
 
             # Check if url is in cache, use cached response if it is
-            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(url)
+            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(
+                url)
             if cached_body:
                 return cached_body
 
@@ -786,7 +907,7 @@ class URL:
             encoding_response = response_headers.get("content-type", "utf8")
             encoding_position = encoding_response.find("charset=")
             encoding = (
-                encoding_response[encoding_position + 8 :]
+                encoding_response[encoding_position + 8:]
                 if encoding_position != -1
                 else "utf8"
             )
