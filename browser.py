@@ -65,29 +65,26 @@ class DocumentLayout:
     def __init__(self, node):
         self.node = node
         self.parent = None
-        self.children, self.display_list = [], []
+        self.children = []
         self.x, self.y, self.width, self.height = None, None, None, None
 
     def paint(self):
         return []
 
     def layout(self):
-        child = BlockLayout(self.node, self, None)
-        self.children.append(child)
         self.width = WIDTH - 2*HSTEP
         self.x, self.y = HSTEP, VSTEP
+        child = BlockLayout(self.node, self, None)
+        self.children.append(child)
+    
         child.layout()
-#        self.display_list = child.display_list
+        self.display_list = child.display_list
         self.height = child.height
 
 
 class DrawText:
     def __init__(self, x1, y1, text, font):
-        print("x1: ", x1)
-        self.top = y1
-        self.left = x1
-        self.text = text
-        self.font = font
+        self.top, self.left, self.text, self.font = y1, x1, text, font
         self.bottom = y1 + font.metrics("linespace")
 
     def execute(self, scroll, canvas):
@@ -96,11 +93,7 @@ class DrawText:
 
 class DrawRect:
     def __init__(self, x1, y1, x2, y2, color):
-        self.top = y1
-        self.left = x1
-        self.bottom = y2
-        self.right = x2
-        self.color = color
+        self.top, self.left, self.bottome, self.right, self.color = x1, y1, y2, x2, color
 
     def execute(self, scroll, canvas):
         canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
@@ -133,12 +126,16 @@ class BlockLayout:
 
     def layout_mode(self):
         if isinstance(self.node, Text):
+            #print("TEXT:")
             return "inline"
         elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
+            #print("BLOCK:", self.node.tag)
             return "block"
         elif self.node.children:
+            # print("INLINE:") 
             return "inline"
         else:
+            #print("BLOCK")
             return "block"
 
     def layout_intermediate(self):
@@ -180,7 +177,7 @@ class BlockLayout:
         if mode == "block":
             self.height = sum([child.height for child in self.children])
         else:
-            self.cursor_y
+            self.height = self.cursor_y
 
     def open_tag(self, tag):
         """Process an open tag and modify the state."""
@@ -252,7 +249,7 @@ class BlockLayout:
         centered_x = (WIDTH - line_length) / 2
         for rel_x, word, font, s in self.line:
             x = centered_x + (rel_x + self.x) - self.line[0][0] if center else rel_x + self.x
-            y = self.y + baseline - max_ascent if s else self.y + baseline - \
+            y = self.y + baseline - max_ascent if s else baseline - \
                 font.metrics("ascent")
             self.display_list.append((x, y, word, font))
 
@@ -652,7 +649,6 @@ class Browser:
     def scrolldown(self, e):
         """Scroll down by SCROLL_STEP pixels."""
         # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
-        '''
         delta = (
             e.delta / 120
             if hasattr(e, "delta")
@@ -672,24 +668,38 @@ class Browser:
                 self.scroll -= SCROLL_STEP
                 self.draw()
         else:
-        '''
-        max_y = max(self.document.height + 2*VSTEP - HEIGHT, 0)
-        self.scroll = min(self.scroll + SCROLL_STEP, max_y)
-        self.draw()
+            max_y = max(self.document.height + 2*VSTEP - HEIGHT, 0)
+            self.scroll = min(self.scroll + SCROLL_STEP, max_y)
+            self.draw()
 
     def draw(self):
         self.canvas.delete("all")
         for cmd in self.display_list:
-#            print("cmd: ", cmd, "scroll:", self.scroll, "height:", HEIGHT)
-            if cmd.top > self.scroll + HEIGHT: 
-#                print("skipping command")
+            #print('cmd: ', cmd)
+            if cmd.top > self.scroll + HEIGHT:
                 continue
             if cmd.bottom < self.scroll:
-#                print("skipping command")
                 continue
-#            print("executing command")
             cmd.execute(self.scroll, self.canvas)
 
+        '''
+            if c in EMOJIS:
+                self.canvas.create_image(x, y - self.scroll, image=EMOJIS[c])
+                continue
+            self.canvas.create_text(
+                x, y - self.scroll, text=c, font=d, anchor="nw")
+   
+            
+        if self.display_list and self.display_list[-1][1] > HEIGHT:
+            self.canvas.create_rectangle(
+                WIDTH - 8,
+                self.scroll / self.display_list[-1][1] * HEIGHT,
+                WIDTH,
+                HEIGHT / self.display_list[-1][1] * HEIGHT
+                + (self.scroll / self.display_list[-1][1]) * HEIGHT,
+                fill="blue",
+            )
+        '''
 
     def load(self, url, view_source: Optional[bool] = False):
         """Load the given URL and convert text tags to character tags."""
@@ -700,15 +710,16 @@ class Browser:
         if view_source:
             print(body)
         else:
-            body = body.replace("<p>", "<p>")
-            cursor_x, cursor_y = HSTEP, VSTEP
+            #    body = body.replace("<p>", "<p>")
+           # cursor_x, cursor_y = HSTEP, VSTEP
             self.nodes = HTMLParser(body).parse()
             self.document = DocumentLayout(self.nodes)
             self.document.layout()
-            #self.display_list = self.document.display_list
+        #    self.display_list = self.document.display_list
             self.display_list = []
             paint_tree(self.document, self.display_list)
-            self.draw()
+            print_tree(self.document)
+           # self.draw()
 
 
 class URL:
