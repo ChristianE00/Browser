@@ -99,11 +99,13 @@ class DrawRect:
         canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
 
 
-
+#NOTE: Doesn't seem to be creating all the child blocks
+#       Only 2 BlockLayouts are working <html>, <body>
 class BlockLayout:
     """A class that takes a list of tokens and converts it to a display list."""
 
     def __init__(self, node, parent, previous):
+        print('block created node: ', node)
         self.node = node
         self.parent = parent
         self.previous = previous
@@ -125,17 +127,18 @@ class BlockLayout:
 
 
     def layout_mode(self):
+        print('type of node: ', type(self.node), ' node: ', self.node)
         if isinstance(self.node, Text):
-            #print("TEXT:")
+            print("Inline First")
             return "inline"
         elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
-            #print("BLOCK:", self.node.tag)
+            print("BLOCK First")
             return "block"
         elif self.node.children:
-            # print("INLINE:") 
+            print("INLINE Second") 
             return "inline"
         else:
-            #print("BLOCK")
+            print("BLOCK Second")
             return "block"
 
     def layout_intermediate(self):
@@ -156,7 +159,9 @@ class BlockLayout:
             self.y = self.previous.y + self.previous.height
         else:
             self.y = self.parent.y
+        #NOTE: Thinks <body>
         if mode == "block":
+            print('is block')
             previous = None
             for child in self.node.children:
                 next = BlockLayout(child, self, previous)
@@ -710,16 +715,13 @@ class Browser:
         if view_source:
             print(body)
         else:
-            #    body = body.replace("<p>", "<p>")
-           # cursor_x, cursor_y = HSTEP, VSTEP
             self.nodes = HTMLParser(body).parse()
+            # Start of broken code
             self.document = DocumentLayout(self.nodes)
             self.document.layout()
-        #    self.display_list = self.document.display_list
             self.display_list = []
             paint_tree(self.document, self.display_list)
-            print_tree(self.document)
-           # self.draw()
+            self.draw()
 
 
 class URL:
@@ -941,7 +943,6 @@ class URL:
 
 if __name__ == "__main__":
     import sys
-
     """
     body = URL(sys.argv[1]).request()
     nodes = HTMLParser(body).parse()
