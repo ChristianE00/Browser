@@ -68,6 +68,9 @@ class DocumentLayout:
         self.children = []
         self.x, self.y, self.width, self.height = None, None, None, None
 
+    def __repr__(self):
+        return "DocumentLayout()"
+    
     def paint(self):
         return []
 
@@ -93,7 +96,7 @@ class DrawText:
 
 class DrawRect:
     def __init__(self, x1, y1, x2, y2, color):
-        self.top, self.left, self.bottome, self.right, self.color = x1, y1, y2, x2, color
+        self.top, self.left, self.bottom, self.right, self.color = x1, y1, y2, x2, color
 
     def execute(self, scroll, canvas):
         canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
@@ -105,12 +108,15 @@ class BlockLayout:
     """A class that takes a list of tokens and converts it to a display list."""
 
     def __init__(self, node, parent, previous):
-        print('block created node: ', node)
         self.node = node
         self.parent = parent
         self.previous = previous
         self.children = []
         self.x, self.y, self.width, self.height = 0, 0, 0, 0
+
+    def __repr__(self):
+        return "BlockLayout(x={}, y={}, width={}, height={})".format(
+            self.x, self.y, self.width, self.height)
 
     def paint(self):
         cmds = []
@@ -127,26 +133,21 @@ class BlockLayout:
 
 
     def layout_mode(self):
-        print('type of node: ', type(self.node), ' node: ', self.node)
+#        print('type of node: ', type(self.node), ' node: ', self.node)
         if isinstance(self.node, Text):
-            print("Inline First")
+#            print("Inline First")
             return "inline"
         elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
-            print("BLOCK First")
+#            print("BLOCK First")
             return "block"
         elif self.node.children:
-            print("INLINE Second") 
+#            print("INLINE Second") 
             return "inline"
         else:
-            print("BLOCK Second")
+#            print("BLOCK Second")
             return "block"
 
-    def layout_intermediate(self):
-        previous = None
-        for child in self.node.children:
-            next = BlockLayout(child, self, previous)
-            self.children.append(next)
-            previous = next
+
 
     def layout(self):
         self.x = self.parent.x
@@ -161,7 +162,6 @@ class BlockLayout:
             self.y = self.parent.y
         #NOTE: Thinks <body>
         if mode == "block":
-            print('is block')
             previous = None
             for child in self.node.children:
                 next = BlockLayout(child, self, previous)
@@ -447,11 +447,13 @@ class HTMLParser:
     def get_attributes(self, text):
         """Return the tag and attributes from a string."""
 
-        single_quote, double_quote, swap = False, False, False
-        parts = []
+        parts = text.split()
+        tag = parts[0]
         current = ""
         attributes = {}
 
+        """
+        single_quote, double_quote, swap = False, False, False
         for c in text:
             if c == "'" and not double_quote:
                 single_quote = not single_quote
@@ -470,18 +472,17 @@ class HTMLParser:
                     current += c
             else:
                 current += c
-
         if current:
             parts.append(current)
-        tag = parts[0].casefold() if len(parts) > 0 else ""
+        """
+
+        tag = parts[0].casefold()
         for attrpair in parts[1:]:
-            # attrpair contains c = '=' where c-1 != " " and i+1 != " "
-            if re.search(r"[^ ]=[^ ]", attrpair):
-                # Split the attribute into key and value on c = '=' where c-1 != " " and i+1 != " "
-                key, value = re.split(r"(?<=[^ ])=(?=[^ ])", attrpair, 1)
-                attributes[key.casefold()] = value
-                if len(value) > 2 and value[0] in ["", '"']:
+            if "=" in attrpair:
+                key, value = attrpair.split("=", 1)
+                if len(value) > 2 and value[0] in ["", "\""]:
                     value = value[1:-1]
+                attributes[key.casefold()] = value
             else:
                 attributes[attrpair.casefold()] = ""
         return tag, attributes
@@ -526,6 +527,7 @@ class HTMLParser:
                         in_script = True
                     elif buffer == "/script":
                         in_script = False
+                    #print(repr(self.body[i-10:i+10]), repr(buffer))
                     self.add_tag(buffer)
                     buffer = ""
             else:
@@ -553,7 +555,10 @@ class HTMLParser:
         parent.children.append(node)
 
     def add_tag(self, tag):
+        if tag.startswith("!"):
+            return
         bob = []
+        if tag == "": 0/0
         tag, attributes = self.get_attributes(tag)
         if tag.startswith("<!"):
             return
@@ -710,13 +715,14 @@ class Browser:
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
 
-        body = url.request().replace("&lt;", "<").replace("&gt;", ">")
+        body = url.request()
 
         if view_source:
             print(body)
         else:
             self.nodes = HTMLParser(body).parse()
             # Start of broken code
+            print_tree(self.nodes)
             self.document = DocumentLayout(self.nodes)
             self.document.layout()
             self.display_list = []
