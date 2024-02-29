@@ -55,10 +55,43 @@ def set_parameters(**params):
         SCROLL_STEP = params["SCROLL_STEP"]
 
 
+#-------------------------------------------------------------------------
+
 def paint_tree(layout_object, display_list):
     display_list.extend(layout_object.paint())
     for child in layout_object.children:
         paint_tree(child, display_list)
+
+class DrawText:
+    def __init__(self, x1, y1, text, font):
+        self.top = y1
+        self.left = x1
+        self.text = text
+        self.font = font
+        self.bottom = y1 + font.metrics("linespace")
+
+    def __repr__(self):
+        return "DrawText(top={} left={} bottom={} text={} font={})" \
+            .format(self.top, self.left, self.bottom, self.text, self.font)    
+
+    def execute(self, scroll, canvas):
+        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw")
+
+
+class DrawRect:
+    def __init__(self, x1, y1, x2, y2, color):
+        self.top = y1
+        self.left = x1
+        self.bottom = y2
+        self.right = x2
+        self.color = color
+
+    def __repr__(self):
+        return "DrawRect(top={} left={} bottom={} right={} color={})".format(
+            self.top, self.left, self.bottom, self.right, self.color)
+    
+    def execute(self, scroll, canvas):
+        canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
 
 
 class DocumentLayout:
@@ -79,27 +112,9 @@ class DocumentLayout:
         self.x, self.y = HSTEP, VSTEP
         child = BlockLayout(self.node, self, None)
         self.children.append(child)
-    
         child.layout()
         self.display_list = child.display_list
         self.height = child.height
-
-
-class DrawText:
-    def __init__(self, x1, y1, text, font):
-        self.top, self.left, self.text, self.font = y1, x1, text, font
-        self.bottom = y1 + font.metrics("linespace")
-
-    def execute(self, scroll, canvas):
-        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw")
-
-
-class DrawRect:
-    def __init__(self, x1, y1, x2, y2, color):
-        self.top, self.left, self.bottom, self.right, self.color = x1, y1, y2, x2, color
-
-    def execute(self, scroll, canvas):
-        canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
 
 
 #NOTE: Doesn't seem to be creating all the child blocks
@@ -108,11 +123,18 @@ class BlockLayout:
     """A class that takes a list of tokens and converts it to a display list."""
 
     def __init__(self, node, parent, previous):
+        '''
+        if isinstance(node, Element):
+            self.node = [node]
+        else:
+            self.node = node
+        '''
         self.node = node
         self.parent = parent
         self.previous = previous
         self.children = []
-        self.x, self.y, self.width, self.height = 0, 0, 0, 0
+        self.x, self.y, self.width, self.height = None, None, None, None
+        self.height_of_firstline = 0
 
     def __repr__(self):
         return "BlockLayout(x={}, y={}, width={}, height={})".format(
@@ -120,11 +142,26 @@ class BlockLayout:
 
     def paint(self):
         cmds = []
+
+        if isinstance(self.node, Element) and self.node.tag == "li":
+            rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2), 
+                self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
+            cmds.append(rect)
+
         # Must be called before any text is drawn because it got to be behind the text
         if isinstance(self.node, Element) and self.node.tag == "pre":
             x2, y2, = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "gray")
             cmds.append(rect)
+
+        if isinstance(self.node, Element) and self.node.tag =="nav" \
+        and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
+            x2, y2 = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+            cmds.append(rect)
+
+
+
         if self.layout_mode() == "inline":
             for x, y, word, font in self.display_list:
                 cmds.append(DrawText(x, y, word, font))
@@ -133,20 +170,14 @@ class BlockLayout:
 
 
     def layout_mode(self):
-#        print('type of node: ', type(self.node), ' node: ', self.node)
         if isinstance(self.node, Text):
-#            print("Inline First")
             return "inline"
         elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
-#            print("BLOCK First")
             return "block"
         elif self.node.children:
-#            print("INLINE Second") 
             return "inline"
         else:
-#            print("BLOCK Second")
             return "block"
-
 
 
     def layout(self):
@@ -156,10 +187,18 @@ class BlockLayout:
         self.abbr = False
         self.display_list = []
         mode = self.layout_mode()
+
         if self.previous:
             self.y = self.previous.y + self.previous.height
         else:
             self.y = self.parent.y
+                    
+        if isinstance(self.node, Element) and self.node.tag == "li":
+            self.x = self.parent.x + (2 *HSTEP)
+            self.width = self.parent.width - (2 * HSTEP)
+        else:
+            self.x = self.parent.x
+            self.width = self.parent.width
         #NOTE: Thinks <body>
         if mode == "block":
             previous = None
@@ -183,6 +222,7 @@ class BlockLayout:
             self.height = sum([child.height for child in self.children])
         else:
             self.height = self.cursor_y
+
 
     def open_tag(self, tag):
         """Process an open tag and modify the state."""
@@ -254,12 +294,14 @@ class BlockLayout:
         centered_x = (WIDTH - line_length) / 2
         for rel_x, word, font, s in self.line:
             x = centered_x + (rel_x + self.x) - self.line[0][0] if center else rel_x + self.x
-            y = self.y + baseline - max_ascent if s else baseline - \
+            y = self.y + baseline - max_ascent if s else self.y + baseline - \
                 font.metrics("ascent")
             self.display_list.append((x, y, word, font))
 
         max_descent = max([font.metrics("descent")
                           for x, word, font, s in self.line])
+        #NOTE: might need to be replaced
+        self.height_of_firstline = (1.25 * max_descent) + (1.25 * max_ascent)
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = 0
         self.line = []
@@ -372,13 +414,20 @@ class Element:
         self.parent = parent
 
     def __repr__(self):
-        if self.attributes:
-            str = "<" + self.tag
-            for key, value in self.attributes.items():
-                str += f' {key}="{value}"'
-            return str + ">"
-        # else:
-        return f"<{self.tag}>"
+        attrs = [" " + k + "=\"" + v + "\"" for k, v  in self.attributes.items() if k != self.tag]
+        '''
+        for k, v  in self.attributes.items():
+            if k != self.tag:
+                print('k:', k, 'v:', v)
+        '''
+        attr_str = ""
+        for attr in attrs:
+            attr_str += attr
+        if attr_str == "":
+            return "<" + self.tag + ">"
+        else:
+            return "<" + self.tag + attr_str + ">"
+
 
 
 class Tag:
@@ -446,13 +495,12 @@ class HTMLParser:
 
     def get_attributes(self, text):
         """Return the tag and attributes from a string."""
-
         parts = text.split()
-        tag = parts[0]
         current = ""
         attributes = {}
+        tag = parts[0].casefold()
 
-        """
+        
         single_quote, double_quote, swap = False, False, False
         for c in text:
             if c == "'" and not double_quote:
@@ -474,15 +522,14 @@ class HTMLParser:
                 current += c
         if current:
             parts.append(current)
-        """
+        
 
-        tag = parts[0].casefold()
         for attrpair in parts[1:]:
             if "=" in attrpair:
                 key, value = attrpair.split("=", 1)
+                attributes[key.casefold()] = value               
                 if len(value) > 2 and value[0] in ["", "\""]:
                     value = value[1:-1]
-                attributes[key.casefold()] = value
             else:
                 attributes[attrpair.casefold()] = ""
         return tag, attributes
@@ -527,7 +574,6 @@ class HTMLParser:
                         in_script = True
                     elif buffer == "/script":
                         in_script = False
-                    #print(repr(self.body[i-10:i+10]), repr(buffer))
                     self.add_tag(buffer)
                     buffer = ""
             else:
@@ -558,8 +604,11 @@ class HTMLParser:
         if tag.startswith("!"):
             return
         bob = []
+        '''
         if tag == "": 0/0
+        '''
         tag, attributes = self.get_attributes(tag)
+        
         if tag.startswith("<!"):
             return
         self.implicit_tags(tag)
@@ -612,11 +661,12 @@ class Browser:
             width=WIDTH,
             height=HEIGHT,
         )
-        self.entry = tkinter.Entry(self.window)
-        self.entry.bind("<Return>", self.on_submit)
-        self.text_showing = False
-        self.window.bind("<Configure>", self.resize)
-        self.canvas.pack(fill=tkinter.BOTH, expand=0)
+       # self.entry = tkinter.Entry(self.window)
+ #       self.entry.bind("<Return>", self.on_submit)
+ #       self.text_showing = False
+  #      self.window.bind("<Configure>", self.resize)
+        #self.canvas.pack(fill=tkinter.BOTH, expand=0)
+        self.canvas.pack()
         GRINNING_FACE_IMAGE = tkinter.PhotoImage(file="openmoji/1F600.png")
         EMOJIS["\N{GRINNING FACE}"] = GRINNING_FACE_IMAGE
         self.scroll, self.last_y = 0, 0
@@ -685,7 +735,6 @@ class Browser:
     def draw(self):
         self.canvas.delete("all")
         for cmd in self.display_list:
-            #print('cmd: ', cmd)
             if cmd.top > self.scroll + HEIGHT:
                 continue
             if cmd.bottom < self.scroll:
@@ -721,8 +770,6 @@ class Browser:
             print(body)
         else:
             self.nodes = HTMLParser(body).parse()
-            # Start of broken code
-            print_tree(self.nodes)
             self.document = DocumentLayout(self.nodes)
             self.document.layout()
             self.display_list = []
