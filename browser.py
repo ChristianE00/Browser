@@ -123,13 +123,10 @@ class BlockLayout:
     """A class that takes a list of tokens and converts it to a display list."""
 
     def __init__(self, node, parent, previous):
-        '''
         if isinstance(node, Element):
             self.node = [node]
         else:
             self.node = node
-        '''
-        self.node = node
         self.parent = parent
         self.previous = previous
         self.children = []
@@ -149,7 +146,7 @@ class BlockLayout:
             cmds.append(rect)
 
         # Must be called before any text is drawn because it got to be behind the text
-        if isinstance(self.node, Element) and self.node.tag == "pre":
+        if len(self.node) == 1 and isinstance(self.node[0], Element) and self.node[0].tag == "pre":
             x2, y2, = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "gray")
             cmds.append(rect)
@@ -170,14 +167,26 @@ class BlockLayout:
 
 
     def layout_mode(self):
+        if len(self.node > 1):
+            return "inline"
+        elif isinstance(self.node[0], Text):
+            return "inline"
+        elif any([isinstance(child, element) and child.tag in block_elements for child in self.node[0].children]):
+            return "block"
+        elif self.node[0].children:
+            return "inline"
+        else:
+            return "block"
+        '''
         if isinstance(self.node, Text):
             return "inline"
-        elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
+        elif any([isinstance(child, element) and child.tag in block_elements for child in self.node.children]):
             return "block"
         elif self.node.children:
             return "inline"
         else:
             return "block"
+        '''
 
 
     def layout(self):
