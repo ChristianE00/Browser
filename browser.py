@@ -19,6 +19,12 @@ BLOCK_ELEMENTS = [
     "figcaption", "main", "div", "table", "form", "fieldset",
     "legend", "details", "summary"
 ]
+INHERITED_PROPERTIES = {
+    "font-size": "16px",
+    "font-style": "normal",
+    "font-weight": "normal",
+    "color": "black",
+}
 
 
 def print_tree(node, indent=0):
@@ -55,27 +61,29 @@ def set_parameters(**params):
         SCROLL_STEP = params["SCROLL_STEP"]
 
 
-#-------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 
 def paint_tree(layout_object, display_list):
     display_list.extend(layout_object.paint())
     for child in layout_object.children:
         paint_tree(child, display_list)
 
+
 class DrawText:
-    def __init__(self, x1, y1, text, font):
+    def __init__(self, x1, y1, text, font, color):
         self.top = y1
         self.left = x1
         self.text = text
         self.font = font
         self.bottom = y1 + font.metrics("linespace")
+        self.color = color
 
     def __repr__(self):
         return "DrawText(top={} left={} bottom={} text={} font={})" \
-            .format(self.top, self.left, self.bottom, self.text, self.font)    
+            .format(self.top, self.left, self.bottom, self.text, self.font)
 
     def execute(self, scroll, canvas):
-        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw")
+        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw", fill=self.color)
 
 
 class DrawRect:
@@ -89,9 +97,10 @@ class DrawRect:
     def __repr__(self):
         return "DrawRect(top={} left={} bottom={} right={} color={})".format(
             self.top, self.left, self.bottom, self.right, self.color)
-    
+
     def execute(self, scroll, canvas):
-        canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
+        canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0,
+                                fill=self.color)
 
 
 class DocumentLayout:
@@ -103,12 +112,12 @@ class DocumentLayout:
 
     def __repr__(self):
         return "DocumentLayout()"
-    
+
     def paint(self):
         return []
 
     def layout(self):
-        self.width = WIDTH - 2*HSTEP
+        self.width = WIDTH - 2 * HSTEP
         self.x, self.y = HSTEP, VSTEP
         child = BlockLayout(self.node, self, None)
         self.children.append(child)
@@ -117,7 +126,7 @@ class DocumentLayout:
         self.height = child.height
 
 
-#NOTE: Doesn't seem to be creating all the child blocks
+# NOTE: Doesn't seem to be creating all the child blocks
 #       Only 2 BlockLayouts are working <html>, <body>
 class BlockLayout:
     """A class that takes a list of tokens and converts it to a display list."""
@@ -140,34 +149,44 @@ class BlockLayout:
         return "BlockLayout(x={}, y={}, width={}, height={})".format(
             self.x, self.y, self.width, self.height)
 
+    def recurse(self, node):
+        if isinstance(node, Text):
+            for word in node.text.split():
+                self.word(node, word)
+        else:
+            return
+
     def paint(self):
         cmds = []
+        bgcolor = self.node.style.get("background-color", "transparent")
+        if bgcolor != "transparent":
+            x2, y2 = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+            cmds.append(rect)
 
         if isinstance(self.node, Element) and self.node.tag == "li":
-            rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2), 
-                self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
+            rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2),
+                            self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
             cmds.append(rect)
 
         # Must be called before any text is drawn because it got to be behind the text
+        '''
         if isinstance(self.node, Element) and self.node.tag == "pre":
             x2, y2, = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "gray")
             cmds.append(rect)
-
-        if isinstance(self.node, Element) and self.node.tag =="nav" \
-        and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
+        '''
+        if isinstance(self.node, Element) and self.node.tag == "nav" \
+                and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
             x2, y2 = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
             cmds.append(rect)
 
-
-
         if self.layout_mode() == "inline":
-            for x, y, word, font in self.display_list:
-                cmds.append(DrawText(x, y, word, font))
+            for x, y, word, font, color in self.display_list:
+                cmds.append(DrawText(self.x + x, self.y + y, word, font, color))
 
         return cmds
-
 
     def layout_mode(self):
         if isinstance(self.node, Text):
@@ -178,7 +197,6 @@ class BlockLayout:
             return "inline"
         else:
             return "block"
-
 
     def layout(self):
         self.x = self.parent.x
@@ -192,14 +210,14 @@ class BlockLayout:
             self.y = self.previous.y + self.previous.height
         else:
             self.y = self.parent.y
-                    
+
         if isinstance(self.node, Element) and self.node.tag == "li":
-            self.x = self.parent.x + (2 *HSTEP)
+            self.x = self.parent.x + (2 * HSTEP)
             self.width = self.parent.width - (2 * HSTEP)
         else:
             self.x = self.parent.x
             self.width = self.parent.width
-        #NOTE: Thinks <body>
+        # NOTE: Thinks <body>
         if mode == "block":
             previous = None
             in_head_tag = False
@@ -210,7 +228,7 @@ class BlockLayout:
                 self.children.append(next)
                 previous = next
         else:
-            self.cursor_x, self.cursor_y = 0, 0 
+            self.cursor_x, self.cursor_y = 0, 0
             self.weight, self.style = "normal", "roman"
             self.size = 16
             self.line = []
@@ -225,7 +243,6 @@ class BlockLayout:
             self.height = sum([child.height for child in self.children])
         else:
             self.height = self.cursor_y
-
 
     def open_tag(self, tag):
         """Process an open tag and modify the state."""
@@ -289,29 +306,38 @@ class BlockLayout:
         if not self.line:
             return
         # NOTE: Might need to change x calculation
+        metrics = [font.metrics() for x, word, font, s, color in self.line]
         max_ascent = max([font.metrics("ascent")
-                         for x, word, font, s in self.line])
+                          for x, word, font, s, color in self.line])
         baseline = self.cursor_y + 1.25 * max_ascent
         last_word_width = self.line[-1][2].measure(self.line[-1][1])
         line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
         centered_x = (WIDTH - line_length) / 2
-        for rel_x, word, font, s in self.line:
+        # NOTE
+        for rel_x, word, font, s, color in self.line:
             x = centered_x + (rel_x + self.x) - self.line[0][0] if center else rel_x + self.x
             y = self.y + baseline - max_ascent if s else self.y + baseline - \
-                font.metrics("ascent")
-            self.display_list.append((x, y, word, font))
+                                                         font.metrics("ascent")
+            self.display_list.append((x, y, word, font, color))
 
         max_descent = max([font.metrics("descent")
-                          for x, word, font, s in self.line])
-        #NOTE: might need to be replaced
+                           for x, word, font, s, color in self.line])
+        # NOTE: might need to be replaced
         self.height_of_firstline = (1.25 * max_descent) + (1.25 * max_ascent)
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = 0
         self.line = []
 
-    def word(self, word):
+    def word(self, node, word):
         """Add a word to the current line."""
         w = 0
+        color = node.style["color"]
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        if style == "normal": style = "roman"
+        size = int(float(node.style["font-size"][:-2]) * .75)
+        font = get_font(size, weight, style)
+
         if self.abbr:
             isLower = None  # Initially, we haven't encountered any character
             buffer = ""
@@ -332,7 +358,7 @@ class BlockLayout:
 
                     w = font.measure(transformed_buffer)
                     self.line.append(
-                        (self.cursor_x, transformed_buffer, font, self.superscript)
+                        (self.cursor_x, transformed_buffer, font, color)
                     )
                     self.cursor_x += w
 
@@ -355,7 +381,7 @@ class BlockLayout:
 
             w = font.measure(transformed_buffer)
             self.line.append(
-                (self.cursor_x, transformed_buffer, font, self.superscript)
+                (self.cursor_x, transformed_buffer, font, color)
             )
             self.cursor_x += w + get_font(self.size, self.weight, self.style).measure(
                 " "
@@ -375,10 +401,10 @@ class BlockLayout:
                 word = ""
                 for current_word in words:
                     if (
-                        self.cursor_x
-                        + font.measure(word + "-")
-                        + font.measure(current_word)
-                        <= WIDTH - HSTEP
+                            self.cursor_x
+                            + font.measure(word + "-")
+                            + font.measure(current_word)
+                            <= WIDTH - HSTEP
                     ):
                         word += current_word
                     else:
@@ -391,7 +417,7 @@ class BlockLayout:
                 self.flush()
                 self.cursor_y += font.metrics("linespace") * 1.25
                 self.cursor_x = HSTEP
-        self.line.append((self.cursor_x, word, font, self.superscript))
+        self.line.append((self.cursor_x, word, font, color))
         self.cursor_x += w + font.measure(" ")
 
 
@@ -417,7 +443,7 @@ class Element:
         self.parent = parent
 
     def __repr__(self):
-        attrs = [" " + k + "=\"" + v + "\"" for k, v  in self.attributes.items() if k != self.tag]
+        attrs = [" " + k + "=\"" + v + "\"" for k, v in self.attributes.items() if k != self.tag]
         '''
         for k, v  in self.attributes.items():
             if k != self.tag:
@@ -432,7 +458,6 @@ class Element:
             return "<" + self.tag + attr_str + ">"
 
 
-
 class Tag:
     """A simple class to represent a tag token."""
 
@@ -441,6 +466,176 @@ class Tag:
 
     def __repr__(self):
         return "Tag('{}')".format(self.tag)
+
+
+def tree_to_list(tree, list):
+    list.append(tree)
+    for child in tree.children:
+        tree_to_list(child, list)
+    return list
+
+def style(node):
+    # Since the style attribute is parsed, we can use the parsed information in the rest of the  browser.
+    node.style = {}
+    if isinstance(node, Element) and "style" in node.attributes:
+        pairs = CSSParser(node.attributes["style"]).body()
+        for property, value in pairs.items():
+            node.style[property] = value
+    # Recurse through the HTML tree to make sure each element gets a style
+    for child in node.children:
+        style(child)
+
+"""
+def style(node, rules):
+    # Save the parsed style attribute in the node style field
+    node.style = {}
+    for selector, body in rules:
+        if not selector.matches(node): continue
+        for property, default_value in INHERITED_PROPERTIES.items():
+            if node.parent:
+                node.style[property] = node.parent.style[property]
+            else:
+                node.style[property] = default_value
+        for property, value in body.items():
+            node.style[property] = value
+    if isinstance(node, Element) and "style" in node.attributes:
+        pairs = CSSParser(node.attributes["style"]).body()
+        for property, value in pairs.items():
+            node.style[property] = value
+    if node.style["font-size"].endswith("%"):
+        if node.parent:
+            parent_font_size = node.parent.style["font-size"]
+        else:
+            parent_font_size = INHERITED_PROPERTIES["font-size"]
+        node_pct = float(node.style["font-size"][:-1]) / 100
+        parent_px = float(parent_font_size[:-2])
+        node.style["font-size"] = str(node_pct * parent_px) + "px"
+    for child in node.children:
+        style(child, rules)
+"""
+
+
+def cascade_priority(rule):
+    selector, body = rule
+    return selector.priority
+
+
+class DescendantSelector:
+    def __init__(self, ancestor, descendant):
+        self.ancestor = ancestor
+        self.descendant = descendant
+        self.priority = ancestor.priority + descendant.priority
+
+    def matches(self, node):
+        if not self.descendant.matches(node): return False
+        while node.parent:
+            if self.ancestor.matches(node.parent): return True
+            node = node.parent
+        return False
+
+
+class TagSelector:
+    def __init__(self, tag):
+        self.tag = tag
+        self.priority = 1
+
+    def matches(self, node):
+        return isinstance(node, Element) and self.tag == node.tag
+
+
+class CSSParser:
+    def __init__(self, s):
+        self.s = s
+        self.i = 0
+
+    def parse(self):
+        rules = []
+        while self.i < len(self.s):
+            try:
+                self.whitespace()
+                selector = self.selector()
+                self.literal("{")
+                self.whitespace()
+                body = self.body()
+                self.literal("}")
+                rules.append((selector, body))
+            except Exception:
+                why = self.ignore_until(["}"])
+                if why == "}":
+                    self.literal("}")
+                    self.whitespace()
+                else:
+                    break
+        return rules
+
+    def selector(self):
+        out = TagSelector(self.word().casefold())
+        self.whitespace()
+        while self.i < len(self.s) and self.s[self.i] != "{":
+            tag = self.word()
+            descendant = TagSelector(tag.casefold())
+            out = DescendantSelector(out, descendant)
+            self.whitespace()
+        return out
+
+    def whitespace(self):
+        while self.i < len(self.s) and self.s[self.i].isspace():
+            self.i += 1
+
+    def word(self):
+        start = self.i
+        while self.i < len(self.s):
+            if self.s[self.i].isalnum() or self.s[self.i] in "#-.%":
+                self.i += 1
+            else:
+                break
+        if not (self.i > start):
+            raise Exception("Parsing error")
+        return self.s[start:self.i]
+
+    def literal(self, literal):
+        if not (self.i < len(self.s) and self.s[self.i] == literal):
+            raise Exception("Parsing error")
+        self.i += 1
+
+    def pair(self):
+        """For finding property-value pairs, which are  a property, a colon, and a value."""
+        prop = self.word()
+        self.whitespace()
+        self.literal(":")
+        self.whitespace()
+        val = self.word()
+        return prop.casefold(), val
+
+    def body(self):
+        """For parsing sequences of property-value pairs. To do this, we simply call our parsing functions in a loop"""
+        pairs = {}
+        # When we fail to parse a property-value pair, we skip to the next semicolon or the end of the string
+        while self.i < len(self.s) and self.s[self.i] != "}":
+            # NOTE:Remove for testing 
+            try:
+                prop, val = self.pair()
+                pairs[prop.casefold()] = val
+                self.whitespace()
+                self.literal(";")
+                self.whitespace()
+            except Exception:
+                why = self.ignore_until([";", "}"])
+                if why == ";":
+                    self.literal(";")
+                    self.whitespace()
+                else:
+                    break
+        return pairs
+
+    def ignore_until(self, chars):
+        """This function allows us to skip property-value pairs that our browser doesn't support"""
+        while self.i < len(self.s):
+            if self.s[self.i] in chars:
+                return self.s[self.i]
+            else:
+                self.i += 1
+        return None
 
 
 class HTMLParser:
@@ -489,8 +684,8 @@ class HTMLParser:
                 else:
                     self.add_tag("body")
             elif (
-                open_tags == ["html", "head"] and tag not in [
-                    "/head"] + self.HEAD_TAGS
+                    open_tags == ["html", "head"] and tag not in [
+                "/head"] + self.HEAD_TAGS
             ):
                 self.add_tag("/head")
             else:
@@ -503,7 +698,6 @@ class HTMLParser:
         attributes = {}
         tag = parts[0].casefold()
 
-        
         single_quote, double_quote, swap = False, False, False
         for c in text:
             if c == "'" and not double_quote:
@@ -525,12 +719,11 @@ class HTMLParser:
                 current += c
         if current:
             parts.append(current)
-        
 
         for attrpair in parts[1:]:
             if "=" in attrpair:
                 key, value = attrpair.split("=", 1)
-                attributes[key.casefold()] = value               
+                attributes[key.casefold()] = value
                 if len(value) > 2 and value[0] in ["", "\""]:
                     value = value[1:-1]
             else:
@@ -611,7 +804,7 @@ class HTMLParser:
         if tag == "": 0/0
         '''
         tag, attributes = self.get_attributes(tag)
-        
+
         if tag.startswith("<!"):
             return
         self.implicit_tags(tag)
@@ -664,11 +857,11 @@ class Browser:
             width=WIDTH,
             height=HEIGHT,
         )
-       # self.entry = tkinter.Entry(self.window)
- #       self.entry.bind("<Return>", self.on_submit)
- #       self.text_showing = False
-  #      self.window.bind("<Configure>", self.resize)
-        #self.canvas.pack(fill=tkinter.BOTH, expand=0)
+        # self.entry = tkinter.Entry(self.window)
+        #       self.entry.bind("<Return>", self.on_submit)
+        #       self.text_showing = False
+        #      self.window.bind("<Configure>", self.resize)
+        # self.canvas.pack(fill=tkinter.BOTH, expand=0)
         self.canvas.pack()
         GRINNING_FACE_IMAGE = tkinter.PhotoImage(file="openmoji/1F600.png")
         EMOJIS["\N{GRINNING FACE}"] = GRINNING_FACE_IMAGE
@@ -715,8 +908,8 @@ class Browser:
         delta = (
             e.delta / 120
             if hasattr(e, "delta")
-            and e.delta is not None
-            and platform.system() == "Darwin"
+               and e.delta is not None
+               and platform.system() == "Darwin"
             else e.delta if hasattr(e, "delta") else None
         )
         # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
@@ -725,13 +918,13 @@ class Browser:
         # Scroll up
 
         if (delta is not None and delta > 0) or (
-            hasattr(e, "keysym") and e.keysym == "Up"
+                hasattr(e, "keysym") and e.keysym == "Up"
         ):
             if self.scroll > 0:
                 self.scroll -= SCROLL_STEP
                 self.draw()
         else:
-            max_y = max(self.document.height + 2*VSTEP - HEIGHT, 0)
+            max_y = max(self.document.height + 2 * VSTEP - HEIGHT, 0)
             self.scroll = min(self.scroll + SCROLL_STEP, max_y)
             self.draw()
 
@@ -773,7 +966,24 @@ class Browser:
             print(body)
         else:
             self.nodes = HTMLParser(body).parse()
+            links = [node.attributes["href"]
+                     for node in tree_to_list(self.nodes, [])
+                     if isinstance(node, Element)
+                     and node.tag == "link"
+                     and node.attributes.get("rel") == "stylesheet"
+                     and "href" in node.attributes]
+            DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
+            rules = DEFAULT_STYLE_SHEET.copy()
+            for link in links:
+                try:
+                    body = url.resolve(link).request()
+                except:
+                    continue
+                rules.extend(CSSParser(body).parse())
+
+#            style(self.nodes, sorted(rules, key=cascade_priority))
             self.document = DocumentLayout(self.nodes)
+            style(self.nodes)
             self.document.layout()
             self.display_list = []
             paint_tree(self.document, self.display_list)
@@ -784,6 +994,21 @@ class URL:
     """This class is used to parse the url and request the data from the server"""
 
     cache = {}
+
+    def resolve(self, url):
+        if "://" in url: return URL(url)
+        if not url.startswith("/"):
+            dir, _ = self.path.rsplit("/", 1)
+            while url.startswith("../"):
+                _, url = url.split("/", 1)
+                if "/" in dir:
+                    dir, _ = dir.rsplit("/", 1)
+            url = dir + "/" + url
+        if url.startswith("//"):
+            return URL(self.scheme + ":" + url)
+        else:
+            return URL(self.scheme + "://" + self.host + \
+                       ":" + str(self.port) + url)
 
     def format_headers(self, headers):
         """Format the given header dictionary into a string."""
@@ -805,10 +1030,10 @@ class URL:
                                    for k, v in headers.items())
         headers_text = "\r\n" + user_agent + connection + headers_text
         base_headers = (
-            "GET {} HTTP/1.1\r\n".format(self.path)
-            + "Host: {}".format(self.host)
-            + headers_text
-            + "\r\n\r\n"
+                "GET {} HTTP/1.1\r\n".format(self.path)
+                + "Host: {}".format(self.host)
+                + headers_text
+                + "\r\n\r\n"
         ).encode("utf8")
         return base_headers
 
@@ -882,7 +1107,7 @@ class URL:
             if header.casefold() == "location":
                 if "://" not in value:
                     value = (
-                        self.scheme.strip() + "://" + self.host.strip() + value.strip()
+                            self.scheme.strip() + "://" + self.host.strip() + value.strip()
                     )
                 if value in self.visited_urls:
                     return "Error: Redirect loop detected"
@@ -915,10 +1140,10 @@ class URL:
     def send_request(self, s, headers):
         """Send the request to the server."""
         my_headers = (
-            "GET {} HTTP/1.1\r\n".format(self.path)
-            + "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(
-                self.host
-            )
+                "GET {} HTTP/1.1\r\n".format(self.path)
+                + "Host: {}\r\nConnection: close\r\nUser-Agent: SquidWeb\r\n\r\n".format(
+            self.host
+        )
         ).encode("utf8")
         if headers:
             my_headers = self.format_headers(headers)
@@ -999,6 +1224,7 @@ class URL:
 
 if __name__ == "__main__":
     import sys
+
     """
     body = URL(sys.argv[1]).request()
     nodes = HTMLParser(body).parse()
