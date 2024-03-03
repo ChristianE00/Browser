@@ -118,14 +118,20 @@ class DocumentLayout:
         self.display_list = child.display_list
         self.height = child.height
 
-def style(node):
+def style(node, rules):
     node.style = {}
     if isinstance(node, Element) and "style" in node.attributes:
         pairs = CSSParser(node.attributes["style"]).body()
         for property, value in pairs.items():
             node.style[property] = value
+
+    for selector, body in rules:
+        if not selector.matches(node): continue
+        for property, value in body.items():
+            node.style[property] = value
+
     for child in node.children:
-        style(child)
+        style(child, rules)
 
 
 
@@ -745,9 +751,11 @@ class Browser:
         if view_source:
             print(body)
         else:
+            DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
             self.nodes = HTMLParser(body).parse()
             self.document = DocumentLayout(self.nodes)
-            style(self.nodes)
+            rules = DEFAULT_STYLE_SHEET.copy()
+            style(self.nodes, rules)
             self.document.layout()
             self.display_list = []
             paint_tree(self.document, self.display_list)
