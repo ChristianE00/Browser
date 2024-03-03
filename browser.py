@@ -10,6 +10,7 @@ from typing import Dict, Optional
 from CSSParser import CSSParser
 from Text import Text
 from Element import Element
+from classselector import ClassSelector
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
@@ -26,6 +27,7 @@ INHERITED_PROPERTIES = {
     "font-size": "16px",
     "font-style": "normal",
     "font-weight": "normal",
+    "font-family": "Times",
     "color": "black",
 }
 
@@ -36,12 +38,12 @@ def print_tree(node, indent=0):
         print_tree(child, indent + 2)
 
 
-def get_font(size, weight, slant):
-    key = (size, weight, slant)
+def get_font(size, weight, slant, family):
+    key = (size, weight, slant, family)
 
     # If the font is not in the cache, create it and add it to the cache
     if key not in FONTS:
-        font = tkinter.font.Font(size=size, weight=weight, slant=slant)
+        font = tkinter.font.Font(size=size, weight=weight, slant=slant, family=family)
         label = tkinter.Label(font=font)
         FONTS[key] = (font, label)
     return FONTS[key][0]
@@ -80,7 +82,7 @@ class DrawText:
 
     def __repr__(self):
         return "DrawText(top={} left={} bottom={} text={} font={})" \
-            .format(self.top, self.left, self.bottom, self.text, self.font)    
+            .format(self.top, self.left, self.bottom, self.text, self.font)
 
     def execute(self, scroll, canvas):
         canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw", fill=self.color)
@@ -175,12 +177,6 @@ def tree_to_list(tree, list):
 class BlockLayout:
 
     def __init__(self, node, parent, previous):
-        '''
-        if isinstance(node, Element):
-            self.node = [node]
-        else:
-            self.node = node
-        '''
         self.node = node
         self.parent = parent
         self.previous = previous
@@ -254,8 +250,17 @@ class BlockLayout:
             self.x = self.parent.x + (2 *HSTEP)
             self.width = self.parent.width - (2 * HSTEP)
         else:
+            # Ch6. Width/Height exercise
+            width = self.node.style.get("height", "auto")
             self.x = self.parent.x
-            self.width = self.parent.width
+            if width == "auto":
+                self.width = self.parent.width
+            else:
+                width_as_float = float(width)
+                if width_as_float < 0:
+                    self.width = self.parent.width
+                else:
+                    self.width = width_as_float
         #NOTE: Thinks <body>
         if mode == "block":
             previous = None
@@ -279,6 +284,16 @@ class BlockLayout:
             self.height = sum([child.height for child in self.children])
         else:
             self.height = self.cursor_y
+            '''
+            height = self.node[0].style.get("height", "auto")
+            if height == "auto":
+                self.height = self.cursor_y
+            else:
+                self.height = int(height[:-2])
+            '''
+
+
+            #self.height = self.cursor_y
 
     """
     def open_tag(self, tag):
@@ -373,9 +388,10 @@ class BlockLayout:
         color = node.style["color"]
         weight = node.style["font-weight"]
         style = node.style["font-style"]
+        family = node.style["font-family"]
         if style == "normal": style = "roman"
         size = int(float(node.style["font-size"][:-2]) * .75)
-        font = get_font(size, weight, style)
+        font = get_font(size, weight, style, family)
         self.style = style
         self.weight = weight
         self.size = size
@@ -392,10 +408,10 @@ class BlockLayout:
 
                 if currentIsLower != isLower:
                     if isLower:  # If the previous chunk was lowercase
-                        font = get_font(self.size // 2, "bold", self.style)
+                        font = get_font(self.size // 2, "bold", self.style, family)
                         transformed_buffer = buffer.upper()
                     else:  # If the previous chunk was uppercase
-                        font = get_font(self.size, self.weight, self.style)
+                        font = get_font(self.size, self.weight, self.style, family)
                         transformed_buffer = buffer
 
                     w = font.measure(transformed_buffer)
@@ -411,27 +427,27 @@ class BlockLayout:
                     isLower = currentIsLower
                 else:
                     buffer += c
-            font = get_font(self.size, self.weight, self.style)
+            font = get_font(self.size, self.weight, self.style, family)
             # Handle any remaining characters in the buffer after the loop
             if buffer:
                 if isLower:
-                    font = get_font(self.size // 2, "bold", self.style)
+                    font = get_font(self.size // 2, "bold", self.style, family)
                     transformed_buffer = buffer.upper()
                 else:
-                    font = get_font(self.size, self.weight, self.style)
+                    font = get_font(self.size, self.weight, self.style, family)
                     transformed_buffer = buffer
 
             w = font.measure(transformed_buffer)
             self.line.append(
                 (self.cursor_x, transformed_buffer, font, False, color)
             )
-            self.cursor_x += w + get_font(self.size, self.weight, self.style).measure(
+            self.cursor_x += w + get_font(self.size, self.weight, self.style, family).measure(
                 " "
             )
             return
 
         else:
-            font = get_font(self.size, self.weight, self.style)
+            font = get_font(self.size, self.weight, self.style, family)
         w = font.measure(word)
         if word == "\n":
             self.cursor_x, self.cursor_y = HSTEP, self.cursor_y + VSTEP * 2
