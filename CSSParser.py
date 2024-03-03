@@ -1,17 +1,17 @@
+
 class CSSParser:
-    def __int__(self, css):
+    def __init__(self, s):
         self.s = s
         self.i = 0
-    
+
     def whitespace(self):
         while self.i < len(self.s) and self.s[self.i].isspace():
             self.i += 1
 
-
     def word(self):
         start = self.i
         while self.i < len(self.s):
-            if self.s[self.i]isalnum() or self.s[self.i] in "#-.%":
+            if self.s[self.i].isalnum() or self.s[self.i] in "#-.%":
                 self.i += 1
             else:
                 break
@@ -41,21 +41,15 @@ class CSSParser:
                 self.whitespace()
                 self.literal(";")
                 self.whitespace()
-            except:
+            except Exception:
                 why = self.ignore_until([";"])
                 if why == ";":
                     self.literal(";")
                     self.whitespace()
                 else:
                     break
-    def style(node):
-        node.start = {}
-        if isinstance(node, Element) and "style" in node.attributes:
-            pairs = CSSParser(node.attributes["style"]).body()
-            for property, value in pairs.items():
-                node.style[property] = value
         return pairs
-    
+
     def ignore_until(self, chars):
         while self.i < len(self.s):
             if self.s[self.i] in chars:

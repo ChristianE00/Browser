@@ -1,5 +1,5 @@
+
 class Element:
-    """A simple class to represent an element token."""
 
     def __init__(self, tag, attributes, parent):
         self.attributes = attributes
@@ -8,10 +8,17 @@ class Element:
         self.parent = parent
 
     def __repr__(self):
-        if self.attributes:
-            str = "<" + self.tag
-            for key, value in self.attributes.items():
-                str += f' {key}="{value}"'
-            return str + ">"
-        # else:
-        return f"<{self.tag}>"
+        attrs = [" " + k + "=\"" + v + "\"" for k, v  in self.attributes.items() if k != self.tag]
+        '''
+        for k, v  in self.attributes.items():
+            if k != self.tag:
+                print('k:', k, 'v:', v)
+        '''
+        attr_str = ""
+        for attr in attrs:
+            attr_str += attr
+        if attr_str == "":
+            return "<" + self.tag + ">"
+        else:
+            return "<" + self.tag + attr_str + ">"
+

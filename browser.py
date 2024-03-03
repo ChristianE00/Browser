@@ -7,10 +7,13 @@ import tkinter
 import tkinter.font
 import unicodedata
 from typing import Dict, Optional
-
+from CSSParser import CSSParser
+from Text import Text
+from Element import Element
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
-EMOJIS, FONTS = {}, {}
+EMOJIS = {}
+FONTS = {}
 BLOCK_ELEMENTS = [
     "html", "body", "article", "section", "nav", "aside",
     "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
@@ -29,7 +32,6 @@ def print_tree(node, indent=0):
 
 
 def get_font(size, weight, slant):
-    """Get a font from the cache or create it and add it to the cache."""
     key = (size, weight, slant)
 
     # If the font is not in the cache, create it and add it to the cache
@@ -116,8 +118,6 @@ class DocumentLayout:
         self.display_list = child.display_list
         self.height = child.height
 
-
-
 def style(node):
     node.style = {}
     if isinstance(node, Element) and "style" in node.attributes:
@@ -129,76 +129,11 @@ def style(node):
 
 
 
-class CSSParser:
-    def __init__(self, s):
-        self.s = s
-        self.i = 0
-
-    def whitespace(self):
-        while self.i < len(self.s) and self.s[self.i].isspace():
-            self.i += 1
-
-    def word(self):
-        start = self.i
-        while self.i < len(self.s):
-            if self.s[self.i].isalnum() or self.s[self.i] in "#-.%":
-                self.i += 1
-            else:
-                break
-        if not (self.i > start):
-            raise Exception("Parsing error")
-        return self.s[start:self.i]
-
-    def literal(self, literal):
-        if not (self.i < len(self.s) and self.s[self.i] == literal):
-            raise Exception("Parsing error")
-        self.i += 1
-
-    def pair(self):
-        prop = self.word()
-        self.whitespace()
-        self.literal(":")
-        self.whitespace()
-        val = self.word()
-        return prop.casefold(), val
-
-    def body(self):
-        pairs = {}
-        while self.i < len(self.s):
-            try:
-                prop, val = self.pair()
-                pairs[prop.casefold()] = val
-                self.whitespace()
-                self.literal(";")
-                self.whitespace()
-            except Exception:
-                why = self.ignore_until([";"])
-                if why == ";":
-                    self.literal(";")
-                    self.whitespace()
-                else:
-                    break
-        return pairs
-
-    def ignore_until(self, chars):
-        while self.i < len(self.s):
-            if self.s[self.i] in chars:
-                return self.s[self.i]
-            else:
-                self.i += 1
-        return None
-
-
-
-
-
-
 
 
 #NOTE: Doesn't seem to be creating all the child blocks
 #       Only 2 BlockLayouts are working <html>, <body>
 class BlockLayout:
-    """A class that takes a list of tokens and converts it to a display list."""
 
     def __init__(self, node, parent, previous):
         '''
@@ -308,7 +243,6 @@ class BlockLayout:
 
 
     def open_tag(self, tag):
-        """Process an open tag and modify the state."""
         if tag == "abbr":
             self.abbr = True
         elif tag == "sup":
@@ -359,13 +293,11 @@ class BlockLayout:
             self.close_tag(tree.tag)
 
     def token(self, tok):
-        """Process a token and add it to the display list."""
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
 
     def flush(self, center=False):
-        """Flush the current line to the display list."""
         if not self.line:
             return
         # NOTE: Might need to change x calculation
@@ -390,7 +322,6 @@ class BlockLayout:
         self.line = []
 
     def word(self, word):
-        """Add a word to the current line."""
         w = 0
         if self.abbr:
             isLower = None  # Initially, we haven't encountered any character
@@ -473,44 +404,6 @@ class BlockLayout:
                 self.cursor_x = HSTEP
         self.line.append((self.cursor_x, word, font, self.superscript))
         self.cursor_x += w + font.measure(" ")
-
-
-class Text:
-    """A simple class to represent a text token."""
-
-    def __init__(self, text, parent):
-        self.text = text
-        self.children = []
-        self.parent = parent
-
-    def __repr__(self):
-        return repr(self.text)
-
-
-class Element:
-    """A simple class to represent an element token."""
-
-    def __init__(self, tag, attributes, parent):
-        self.attributes = attributes
-        self.tag = tag
-        self.children = []
-        self.parent = parent
-
-    def __repr__(self):
-        attrs = [" " + k + "=\"" + v + "\"" for k, v  in self.attributes.items() if k != self.tag]
-        '''
-        for k, v  in self.attributes.items():
-            if k != self.tag:
-                print('k:', k, 'v:', v)
-        '''
-        attr_str = ""
-        for attr in attrs:
-            attr_str += attr
-        if attr_str == "":
-            return "<" + self.tag + ">"
-        else:
-            return "<" + self.tag + attr_str + ">"
-
 
 
 class Tag:
