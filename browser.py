@@ -22,7 +22,12 @@ BLOCK_ELEMENTS = [
     "figcaption", "main", "div", "table", "form", "fieldset",
     "legend", "details", "summary"
 ]
-
+INHERITED_PROPERTIES = {
+    "font-size": "16px",
+    "font-style": "normal",
+    "font-weight": "normal",
+    "color": "black",
+}
 
 def print_tree(node, indent=0):
     """Print the tree structure of the HTML."""
@@ -65,19 +70,20 @@ def paint_tree(layout_object, display_list):
         paint_tree(child, display_list)
 
 class DrawText:
-    def __init__(self, x1, y1, text, font):
+    def __init__(self, x1, y1, text, font, color):
         self.top = y1
         self.left = x1
         self.text = text
         self.font = font
         self.bottom = y1 + font.metrics("linespace")
+        self.color = color
 
     def __repr__(self):
         return "DrawText(top={} left={} bottom={} text={} font={})" \
             .format(self.top, self.left, self.bottom, self.text, self.font)    
 
     def execute(self, scroll, canvas):
-        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw")
+        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw", fill=self.color)
 
 
 class DrawRect:
@@ -120,6 +126,13 @@ class DocumentLayout:
 
 def style(node, rules):
     node.style = {}
+    # Add inherited properties to the node's style
+    for property, default_value in INHERITED_PROPERTIES.items():
+        if node.parent:
+            node.style[property] = node.parent.style[property]
+        else:
+            node.style[property] = default_value
+
     if isinstance(node, Element) and "style" in node.attributes:
         pairs = CSSParser(node.attributes["style"]).body()
         for property, value in pairs.items():
@@ -129,6 +142,16 @@ def style(node, rules):
         if not selector.matches(node): continue
         for property, value in body.items():
             node.style[property] = value
+
+    # Resolve percentage sizes to absolute sizes
+    if node.style["font-size"].endswith("%"):
+        if node.parent:
+            parent_font_size = node.parent.style["font-size"]
+        else:
+            parent_font_size = INHERITED_PROPERTIES["font-size"]
+        node_pct = float(node.style["font-size"][:-1]) / 100
+        parent_px = float(parent_font_size[:-2])
+        node.style["font-size"] = str(node_pct * parent_px) + "px"
 
     for child in node.children:
         style(child, rules)
@@ -197,8 +220,8 @@ class BlockLayout:
 
 
         if self.layout_mode() == "inline":
-            for x, y, word, font in self.display_list:
-                cmds.append(DrawText(x, y, word, font))
+            for x, y, word, font, color in self.display_list:
+                cmds.append(DrawText(x, y, word, font, color))
 
         return cmds
 
@@ -298,15 +321,15 @@ class BlockLayout:
         elif tag == "big":
             self.size -= 4
 
-    def recurse(self, tree):
-        if isinstance(tree, Text):
-            for word in tree.text.split():
-                self.word(word)
+    def recurse(self, node):
+        if isinstance(node, Text):
+            for word in node.text.split():
+                self.word(node, word)
         else:
-            self.open_tag(tree.tag)
-            for child in tree.children:
+            self.open_tag(node.tag)
+            for child in node.children:
                 self.recurse(child)
-            self.close_tag(tree.tag)
+            self.close_tag(node.tag)
 
     def token(self, tok):
         if isinstance(tok, Text):
@@ -318,27 +341,35 @@ class BlockLayout:
             return
         # NOTE: Might need to change x calculation
         max_ascent = max([font.metrics("ascent")
-                         for x, word, font, s in self.line])
+                         for x, word, font, s, color in self.line])
         baseline = self.cursor_y + 1.25 * max_ascent
         last_word_width = self.line[-1][2].measure(self.line[-1][1])
         line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
         centered_x = (WIDTH - line_length) / 2
-        for rel_x, word, font, s in self.line:
+        for rel_x, word, font, s, color in self.line:
             x = centered_x + (rel_x + self.x) - self.line[0][0] if center else rel_x + self.x
             y = self.y + baseline - max_ascent if s else self.y + baseline - \
                 font.metrics("ascent")
-            self.display_list.append((x, y, word, font))
+            self.display_list.append((x, y, word, font, color))
 
         max_descent = max([font.metrics("descent")
-                          for x, word, font, s in self.line])
+                          for x, word, font, s, color in self.line])
         #NOTE: might need to be replaced
         self.height_of_firstline = (1.25 * max_descent) + (1.25 * max_ascent)
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = 0
         self.line = []
 
-    def word(self, word):
+    def word(self, node, word):
         w = 0
+
+        color = node.style["color"]
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        if style == "normal": style = "roman"
+        size = int(float(node.style["font-size"][:-2]) * .75)
+        font = get_font(size, weight, style)
+
         if self.abbr:
             isLower = None  # Initially, we haven't encountered any character
             buffer = ""
@@ -382,7 +413,7 @@ class BlockLayout:
 
             w = font.measure(transformed_buffer)
             self.line.append(
-                (self.cursor_x, transformed_buffer, font, self.superscript)
+                (self.cursor_x, transformed_buffer, font, False, color)
             )
             self.cursor_x += w + get_font(self.size, self.weight, self.style).measure(
                 " "
@@ -418,7 +449,7 @@ class BlockLayout:
                 self.flush()
                 self.cursor_y += font.metrics("linespace") * 1.25
                 self.cursor_x = HSTEP
-        self.line.append((self.cursor_x, word, font, self.superscript))
+        self.line.append((self.cursor_x, word, font, False, color))
         self.cursor_x += w + font.measure(" ")
 
 
