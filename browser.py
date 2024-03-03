@@ -134,6 +134,16 @@ def style(node, rules):
         style(child, rules)
 
 
+def cascade_priority(rule):
+    selector, body = rule
+    return selector.priority
+
+def tree_to_list(tree, list):
+    list.append(tree)
+    for child in tree.children:
+        tree_to_list(child, list)
+    return list
+
 
 
 
@@ -753,9 +763,27 @@ class Browser:
         else:
             DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
             self.nodes = HTMLParser(body).parse()
+
+            # Gather all the relative URL for each linked style sheet
+            links = [node.attributes["href"]
+                     for node in tree_to_list(self.nodes, [])
+                     if isinstance(node, Element)
+                     and node.tag == "link"
+                     and node.attributes.get("rel") == "stylesheet"
+                     and "href" in node.attributes]
             self.document = DocumentLayout(self.nodes)
             rules = DEFAULT_STYLE_SHEET.copy()
-            style(self.nodes, rules)
+
+            # Convert relative URLs to full URLS:
+            for link in links:
+                try:
+                    body = url.resolve(link).request()
+                # ignore stylesheets that fail to download
+                except:
+                    continue
+                rules.extend(CSSParser(body).parse())
+
+            style(self.nodes, sorted(rules, key=cascade_priority))
             self.document.layout()
             self.display_list = []
             paint_tree(self.document, self.display_list)
@@ -826,6 +854,22 @@ class URL:
             self.path = url
             self.scheme, url = url.split(":", 1)
             self.port = None
+
+    def resolve(self, url):
+        if "://" in url: return URL(url)
+        if not url.startswith("/"):
+            dir, _ = self.path.rsplit("/", 1)
+            while url.startswith("../"):
+                _, url = url.split("/", 1)
+                if "/" in dir:
+                    dir, _ = dir.rsplit("/", 1)
+            url = dir + "/" + url
+        if url.startswith("//"):
+            return URL(self.scheme + ":" + url)
+        else:
+            return URL(self.scheme + "://" + self.host + \
+                       ":" + str(self.port) + url)
+
 
     def cache_response(self, url, headers, body):
         """Cache the response from the server if possible."""
