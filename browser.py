@@ -265,8 +265,8 @@ class BlockLayout:
                 previous = next
         else:
             self.cursor_x, self.cursor_y = 0, 0 
-            self.weight, self.style = "normal", "roman"
-            self.size = 16
+            #self.weight, self.style = "normal", "roman"
+            #self.size = 16
             self.line = []
             self.recurse(self.node)
             self.flush()
@@ -280,7 +280,7 @@ class BlockLayout:
         else:
             self.height = self.cursor_y
 
-
+    """
     def open_tag(self, tag):
         if tag == "abbr":
             self.abbr = True
@@ -320,16 +320,23 @@ class BlockLayout:
             self.size += 2
         elif tag == "big":
             self.size -= 4
+   """
 
     def recurse(self, node):
         if isinstance(node, Text):
             for word in node.text.split():
                 self.word(node, word)
         else:
+            if node.tag == "br":
+                self.flush()
+            for child in node.children:
+                self.recurse(child)
+            '''
             self.open_tag(node.tag)
             for child in node.children:
                 self.recurse(child)
             self.close_tag(node.tag)
+            '''
 
     def token(self, tok):
         if isinstance(tok, Text):
@@ -369,6 +376,9 @@ class BlockLayout:
         if style == "normal": style = "roman"
         size = int(float(node.style["font-size"][:-2]) * .75)
         font = get_font(size, weight, style)
+        self.style = style
+        self.weight = weight
+        self.size = size
 
         if self.abbr:
             isLower = None  # Initially, we haven't encountered any character
@@ -683,6 +693,7 @@ class Browser:
             self.window,
             width=WIDTH,
             height=HEIGHT,
+            bg="white"
         )
        # self.entry = tkinter.Entry(self.window)
  #       self.entry.bind("<Return>", self.on_submit)
@@ -826,33 +837,6 @@ class URL:
 
     cache = {}
 
-    def format_headers(self, headers):
-        """Format the given header dictionary into a string."""
-        user_agent = "User-Agent: SquidWeb\r\n"
-        connection = "Connection: close\r\n"
-        remove_list = []
-        for key in headers.keys():
-            if key.lower() == "user-agent":
-                user_agent = key + ": " + headers[key] + "\r\n"
-                remove_list.append(key)
-            if key.lower() == "connection":
-                connection = key + ": " + headers[key] + "\r\n"
-                remove_list.append(key)
-        # Remove the headers that are already in the default headers
-        for key in remove_list:
-            del headers[key]
-
-        headers_text = "\r\n".join("{}: {}".format(k, v)
-                                   for k, v in headers.items())
-        headers_text = "\r\n" + user_agent + connection + headers_text
-        base_headers = (
-            "GET {} HTTP/1.1\r\n".format(self.path)
-            + "Host: {}".format(self.host)
-            + headers_text
-            + "\r\n\r\n"
-        ).encode("utf8")
-        return base_headers
-
     def __init__(self, url):
         """Initiate the URL class with a scheme, host, port, and path."""
         self.visited_urls = set()
@@ -886,6 +870,37 @@ class URL:
             self.scheme, url = url.split(":", 1)
             self.port = None
 
+    def __repr__(self):
+        return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')" 
+
+    def format_headers(self, headers):
+        """Format the given header dictionary into a string."""
+        user_agent = "User-Agent: SquidWeb\r\n"
+        connection = "Connection: close\r\n"
+        remove_list = []
+        for key in headers.keys():
+            if key.lower() == "user-agent":
+                user_agent = key + ": " + headers[key] + "\r\n"
+                remove_list.append(key)
+            if key.lower() == "connection":
+                connection = key + ": " + headers[key] + "\r\n"
+                remove_list.append(key)
+        # Remove the headers that are already in the default headers
+        for key in remove_list:
+            del headers[key]
+
+        headers_text = "\r\n".join("{}: {}".format(k, v)
+                                   for k, v in headers.items())
+        headers_text = "\r\n" + user_agent + connection + headers_text
+        base_headers = (
+            "GET {} HTTP/1.1\r\n".format(self.path)
+            + "Host: {}".format(self.host)
+            + headers_text
+            + "\r\n\r\n"
+        ).encode("utf8")
+        return base_headers
+
+    
     def resolve(self, url):
         if "://" in url: return URL(url)
         if not url.startswith("/"):
