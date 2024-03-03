@@ -117,6 +117,84 @@ class DocumentLayout:
         self.height = child.height
 
 
+
+def style(node):
+    node.style = {}
+    if isinstance(node, Element) and "style" in node.attributes:
+        pairs = CSSParser(node.attributes["style"]).body()
+        for property, value in pairs.items():
+            node.style[property] = value
+    for child in node.children:
+        style(child)
+
+
+
+class CSSParser:
+    def __init__(self, s):
+        self.s = s
+        self.i = 0
+
+    def whitespace(self):
+        while self.i < len(self.s) and self.s[self.i].isspace():
+            self.i += 1
+
+    def word(self):
+        start = self.i
+        while self.i < len(self.s):
+            if self.s[self.i].isalnum() or self.s[self.i] in "#-.%":
+                self.i += 1
+            else:
+                break
+        if not (self.i > start):
+            raise Exception("Parsing error")
+        return self.s[start:self.i]
+
+    def literal(self, literal):
+        if not (self.i < len(self.s) and self.s[self.i] == literal):
+            raise Exception("Parsing error")
+        self.i += 1
+
+    def pair(self):
+        prop = self.word()
+        self.whitespace()
+        self.literal(":")
+        self.whitespace()
+        val = self.word()
+        return prop.casefold(), val
+
+    def body(self):
+        pairs = {}
+        while self.i < len(self.s):
+            try:
+                prop, val = self.pair()
+                pairs[prop.casefold()] = val
+                self.whitespace()
+                self.literal(";")
+                self.whitespace()
+            except Exception:
+                why = self.ignore_until([";"])
+                if why == ";":
+                    self.literal(";")
+                    self.whitespace()
+                else:
+                    break
+        return pairs
+
+    def ignore_until(self, chars):
+        while self.i < len(self.s):
+            if self.s[self.i] in chars:
+                return self.s[self.i]
+            else:
+                self.i += 1
+        return None
+
+
+
+
+
+
+
+
 #NOTE: Doesn't seem to be creating all the child blocks
 #       Only 2 BlockLayouts are working <html>, <body>
 class BlockLayout:
@@ -142,18 +220,23 @@ class BlockLayout:
 
     def paint(self):
         cmds = []
+        bgcolor = self.node.style.get("background-color", "transparent")
+        if bgcolor != "transparent":
+            x2, y2, = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+            cmds.append(rect)
 
         if isinstance(self.node, Element) and self.node.tag == "li":
             rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2), 
                 self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
             cmds.append(rect)
-
+        '''
         # Must be called before any text is drawn because it got to be behind the text
         if isinstance(self.node, Element) and self.node.tag == "pre":
             x2, y2, = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "gray")
             cmds.append(rect)
-
+        '''
         if isinstance(self.node, Element) and self.node.tag =="nav" \
         and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
             x2, y2 = self.x + self.width, self.y + self.height
@@ -771,6 +854,7 @@ class Browser:
         else:
             self.nodes = HTMLParser(body).parse()
             self.document = DocumentLayout(self.nodes)
+            style(self.nodes)
             self.document.layout()
             self.display_list = []
             paint_tree(self.document, self.display_list)
