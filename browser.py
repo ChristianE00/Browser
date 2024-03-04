@@ -7,9 +7,13 @@ import tkinter
 import tkinter.font
 import unicodedata
 from typing import Dict, Optional
-from CSSParser import CSSParser, ClassSelector
+from CSSParser import CSSParser
+from classselector import ClassSelector
 from Text import Text
 from Element import Element
+
+
+# GLOBALS
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
@@ -28,6 +32,7 @@ INHERITED_PROPERTIES = {
     "font-weight": "normal",
     "color": "black",
 }
+
 
 def print_tree(node, indent=0):
     """Print the tree structure of the HTML."""
