@@ -74,7 +74,6 @@ class CSSParser:
                         pairs["font-family"] = font_family
                 else:
                     pairs[prop.casefold()] = val
-                #pairs[prop.casefold()] = val
                 self.whitespace()
                 self.literal(";")
                 self.whitespace()
