@@ -7,7 +7,7 @@ import tkinter
 import tkinter.font
 import unicodedata
 from typing import Dict, Optional
-from CSSParser import CSSParser
+from CSSParser import CSSParser, ClassSelector
 from Text import Text
 from Element import Element
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
@@ -100,6 +100,7 @@ class DrawRect:
     
     def execute(self, scroll, canvas):
         canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
+
 
 
 class DocumentLayout:

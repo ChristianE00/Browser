@@ -1,5 +1,6 @@
 from DescendantSelector import DescendantSelector
 from TagSelector import TagSelector
+from Element import Element
 class CSSParser:
     def __init__(self, s):
         self.s = s
@@ -60,11 +61,22 @@ class CSSParser:
         return None
 
     def selector(self):
+        word = self.word()
+        if word[0] == ".":
+            out = ClassSelector(word[1:])
+        else:
+            out = TagSelector(word.casefold())
+        '''
         out = TagSelector(self.word().casefold())
+        '''
         self.whitespace()
         while self.i < len(self.s) and self.s[self.i] != "{":
             tag = self.word()
-            descendant = TagSelector(tag.casefold())
+            #descendant = TagSelector(tag.casefold())
+            if tag[0] == ".":
+                descendant = ClassSelector(tag[1:])
+            else:
+                descendant = TagSelector(tag.casefold())
             out = DescendantSelector(out, descendant)
             self.whitespace()
         return out
@@ -96,6 +108,17 @@ class CSSParser:
 
 
 
+class ClassSelector:
+    def __init__(self, class_name):
+        self.class_name = class_name
+        self.priority = 10
+
+    def __repr__(self):
+        return "ClassSelector(classname={}, priority={})".format(
+            self.class_name, self.priority)
+
+    def matches(self, node):
+        return isinstance(node, Element) and self.class_name in node.attributes.get("class", "").split()
 
 
 
