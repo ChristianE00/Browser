@@ -31,7 +31,6 @@ class CSSParser:
         self.whitespace()
         self.literal(":")
         self.whitespace()
-        #val = self.word()
         if prop.casefold() == "font":  # handle font shorthand properties
             i = self.i
             self.ignore_until([";", "}"])
@@ -45,9 +44,7 @@ class CSSParser:
         while self.i < len(self.s) and self.s[self.i] != "}":
             try:
                 prop, val = self.pair()
-               # pairs[prop.casefold()] = val
                 if prop.casefold() == 'font':
-                    #i = self.i
                     split_values = val.split()
                     if(len(split_values) == 1):
                         pairs["font-family"] = split_values[0]
@@ -84,7 +81,6 @@ class CSSParser:
                     self.whitespace()
                 else:
                     break
-            #print('pairs: ', pairs)
         return pairs
 
     def ignore_until(self, chars):
@@ -101,9 +97,7 @@ class CSSParser:
             out = ClassSelector(word[1:])
         else:
             out = TagSelector(word.casefold())
-        '''
-        out = TagSelector(self.word().casefold())
-        '''
+
         self.whitespace()
         while self.i < len(self.s) and self.s[self.i] != "{":
             tag = self.word()

@@ -6,9 +6,11 @@ class DescendantSelector:
         self.descendant = descendant
         self.priority = ancestor.priority + descendant.priority
 
+
     def __repr__(self):
         return ("DescendantSelector(ancestor={}, descendant={}, priority={})") \
             .format(self.ancestor, self.descendant, self.priority)
+
 
     def matches(self, node):
         if not self.descendant.matches(node): return False

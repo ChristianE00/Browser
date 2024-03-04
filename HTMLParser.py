@@ -1,4 +1,5 @@
-#-----------------------NOT IN USE---------------------------------
+from Element import Element
+from Text import Text
 class HTMLParser:
 
     def __init__(self, body):
@@ -45,8 +46,8 @@ class HTMLParser:
                 else:
                     self.add_tag("body")
             elif (
-                open_tags == ["html", "head"] and tag not in [
-                    "/head"] + self.HEAD_TAGS
+                    open_tags == ["html", "head"] and tag not in [
+                "/head"] + self.HEAD_TAGS
             ):
                 self.add_tag("/head")
             else:
@@ -54,12 +55,12 @@ class HTMLParser:
 
     def get_attributes(self, text):
         """Return the tag and attributes from a string."""
-
-        single_quote, double_quote, swap = False, False, False
-        parts = []
+        parts = text.split()
         current = ""
         attributes = {}
+        tag = parts[0].casefold()
 
+        single_quote, double_quote, swap = False, False, False
         for c in text:
             if c == "'" and not double_quote:
                 single_quote = not single_quote
@@ -73,24 +74,19 @@ class HTMLParser:
                 swap = False
                 parts.append(current)
                 current = ""
-                # Edge case: If there is no space between the end of the quote
-                # and the next attribute
+                # Edge case: If there is no space between the end of the quote and the next attribute
                 if c != " ":
                     current += c
             else:
                 current += c
-
         if current:
             parts.append(current)
-        tag = parts[0].casefold() if len(parts) > 0 else ""
+
         for attrpair in parts[1:]:
-            # attrpair contains c = '=' where c-1 != " " and i+1 != " "
-            if re.search(r"[^ ]=[^ ]", attrpair):
-                # Split the attribute into key and value on c = '=' where c-1
-                # != " " and i+1 != " "
-                key, value = re.split(r"(?<=[^ ])=(?=[^ ])", attrpair, 1)
+            if "=" in attrpair:
+                key, value = attrpair.split("=", 1)
                 attributes[key.casefold()] = value
-                if len(value) > 2 and value[0] in ["", '"']:
+                if len(value) > 2 and value[0] in ["", "\""]:
                     value = value[1:-1]
             else:
                 attributes[attrpair.casefold()] = ""
@@ -163,8 +159,11 @@ class HTMLParser:
         parent.children.append(node)
 
     def add_tag(self, tag):
+        if tag.startswith("!"):
+            return
         bob = []
         tag, attributes = self.get_attributes(tag)
+
         if tag.startswith("<!"):
             return
         self.implicit_tags(tag)
@@ -194,10 +193,7 @@ class HTMLParser:
                                 u_parent.children.append(self.unfinished[j])
                                 unf = self.unfinished[j]
                                 bob.append(
-                                    Element(
-                                        unf.tag,
-                                        unf.attributes,
-                                        unf.parent))
+                                    Element(unf.tag, unf.attributes, unf.parent))
                                 del self.unfinished[j]
                             u_parent = self.unfinished[i - 1]
                             u_parent.children.append(unfinished_tag)

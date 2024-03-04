@@ -10,5 +10,6 @@ class TagSelector:
         return "TagSelector(tag={}, priority={})".format(
             self.tag, self.priority)
 
+
     def matches(self, node):
         return isinstance(node, Element) and self.tag == node.tag

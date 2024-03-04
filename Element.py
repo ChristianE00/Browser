@@ -7,13 +7,9 @@ class Element:
         self.children = []
         self.parent = parent
 
+
     def __repr__(self):
         attrs = [" " + k + "=\"" + v + "\"" for k, v  in self.attributes.items() if k != self.tag]
-        '''
-        for k, v  in self.attributes.items():
-            if k != self.tag:
-                print('k:', k, 'v:', v)
-        '''
         attr_str = ""
         for attr in attrs:
             attr_str += attr

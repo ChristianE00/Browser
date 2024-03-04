@@ -11,7 +11,7 @@ from CSSParser import CSSParser
 from classselector import ClassSelector
 from Text import Text
 from Element import Element
-
+from HTMLParser import  HTMLParser
 
 # GLOBALS
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
@@ -68,12 +68,11 @@ def set_parameters(**params):
         SCROLL_STEP = params["SCROLL_STEP"]
 
 
-#-------------------------------------------------------------------------
-
 def paint_tree(layout_object, display_list):
     display_list.extend(layout_object.paint())
     for child in layout_object.children:
         paint_tree(child, display_list)
+
 
 class DrawText:
     def __init__(self, x1, y1, text, font, color):
@@ -89,6 +88,7 @@ class DrawText:
         return "DrawText(top={} left={} bottom={} text={} font={})" \
             .format(self.top, self.left, self.bottom, self.text, self.font)
 
+
     def execute(self, scroll, canvas):
         canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw", fill=self.color)
 
@@ -101,36 +101,15 @@ class DrawRect:
         self.right = x2
         self.color = color
 
+
     def __repr__(self):
         return "DrawRect(top={} left={} bottom={} right={} color={})".format(
             self.top, self.left, self.bottom, self.right, self.color)
-    
+
+
     def execute(self, scroll, canvas):
         canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
 
-
-
-class DocumentLayout:
-    def __init__(self, node):
-        self.node = node
-        self.parent = None
-        self.children = []
-        self.x, self.y, self.width, self.height = None, None, None, None
-
-    def __repr__(self):
-        return "DocumentLayout()"
-    
-    def paint(self):
-        return []
-
-    def layout(self):
-        self.width = WIDTH - 2*HSTEP
-        self.x, self.y = HSTEP, VSTEP
-        child = BlockLayout(self.node, self, None)
-        self.children.append(child)
-        child.layout()
-        self.display_list = child.display_list
-        self.height = child.height
 
 def style(node, rules):
     node.style = {}
@@ -169,11 +148,38 @@ def cascade_priority(rule):
     selector, body = rule
     return selector.priority
 
+
 def tree_to_list(tree, list):
     list.append(tree)
     for child in tree.children:
         tree_to_list(child, list)
     return list
+
+
+class DocumentLayout:
+    def __init__(self, node):
+        self.node = node
+        self.parent = None
+        self.children = []
+        self.x, self.y, self.width, self.height = None, None, None, None
+
+
+    def __repr__(self):
+        return "DocumentLayout()"
+
+
+    def paint(self):
+        return []
+
+
+    def layout(self):
+        self.width = WIDTH - 2*HSTEP
+        self.x, self.y = HSTEP, VSTEP
+        child = BlockLayout(self.node, self, None)
+        self.children.append(child)
+        child.layout()
+        self.display_list = child.display_list
+        self.height = child.height
 
 
 
@@ -183,12 +189,6 @@ def tree_to_list(tree, list):
 class BlockLayout:
 
     def __init__(self, node, parent, previous):
-        '''
-        if isinstance(node, Element):
-            self.node = [node]
-        else:
-            self.node = node
-        '''
         self.node = node
         self.parent = parent
         self.previous = previous
@@ -212,6 +212,7 @@ class BlockLayout:
             rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2), 
                 self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
             cmds.append(rect)
+
         '''
         # Must be called before any text is drawn because it got to be behind the text
         if isinstance(self.node, Element) and self.node.tag == "pre":
@@ -219,6 +220,7 @@ class BlockLayout:
             rect = DrawRect(self.x, self.y, x2, y2, "gray")
             cmds.append(rect)
         '''
+
         if isinstance(self.node, Element) and self.node.tag =="nav" \
         and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
             x2, y2 = self.x + self.width, self.y + self.height
@@ -273,8 +275,6 @@ class BlockLayout:
                 previous = next
         else:
             self.cursor_x, self.cursor_y = 0, 0 
-            #self.weight, self.style = "normal", "roman"
-            #self.size = 16
             self.line = []
             self.recurse(self.node)
             self.flush()
@@ -288,47 +288,6 @@ class BlockLayout:
         else:
             self.height = self.cursor_y
 
-    """
-    def open_tag(self, tag):
-        if tag == "abbr":
-            self.abbr = True
-        elif tag == "sup":
-            self.size = int(self.size / 2)
-            self.superscript = True
-        elif tag == "i":
-            self.style = "italic"
-        elif tag == "b":
-            self.weight = "bold"
-        elif tag == "small":
-            self.size -= 2
-        elif tag == "big":
-            self.size += 4
-        elif tag == "br":
-            self.flush()
-        elif tag == 'h1 class="title"':
-            self.flush()
-
-    def close_tag(self, tag):
-
-        if tag == "abbr":
-            self.abbr = False
-        elif tag == "h1":
-            self.flush(True)
-        elif tag == "sup":
-            self.superscript = False
-            self.size = int(self.size * 2)
-        elif tag == "p":
-            self.flush()
-            self.cursor_y += VSTEP
-        elif tag == "i":
-            self.style = "roman"
-        elif tag == "b":
-            self.weight = "normal"
-        elif tag == "small":
-            self.size += 2
-        elif tag == "big":
-            self.size -= 4
-   """
 
     def recurse(self, node):
         if isinstance(node, Text):
@@ -339,17 +298,13 @@ class BlockLayout:
                 self.flush()
             for child in node.children:
                 self.recurse(child)
-            '''
-            self.open_tag(node.tag)
-            for child in node.children:
-                self.recurse(child)
-            self.close_tag(node.tag)
-            '''
+
 
     def token(self, tok):
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
+
 
     def flush(self, center=False):
         if not self.line:
@@ -375,9 +330,10 @@ class BlockLayout:
         self.cursor_x = 0
         self.line = []
 
+
     def word(self, node, word):
         w = 0
-
+        # TODO: Make self.{style, weight, size} := {style, weight, size}
         color = node.style["color"]
         weight = node.style["font-weight"]
         style = node.style["font-style"]
@@ -480,216 +436,6 @@ class Tag:
 
     def __repr__(self):
         return "Tag('{}')".format(self.tag)
-
-
-class HTMLParser:
-
-    def __init__(self, body):
-        self.body = body
-        self.unfinished = []
-        self.SELF_CLOSING_TAGS = [
-            "area",
-            "base",
-            "br",
-            "col",
-            "command",
-            "embed",
-            "hr",
-            "img",
-            "input",
-            "keygen",
-            "link",
-            "meta",
-            "param",
-            "source",
-            "track",
-            "wbr",
-        ]
-        self.HEAD_TAGS = [
-            "base",
-            "link",
-            "meta",
-            "script",
-            "style",
-            "title",
-            "basefont",
-            "bgsoung",
-            "noscript",
-        ]
-
-    def implicit_tags(self, tag):
-        while True:
-            open_tags = [node.tag for node in self.unfinished]
-            if open_tags == [] and tag != "html":
-                self.add_tag("html")
-            elif open_tags == ["html"] and tag not in ["head", "body", "/html"]:
-                if tag in self.HEAD_TAGS:
-                    self.add_tag("head")
-                else:
-                    self.add_tag("body")
-            elif (
-                open_tags == ["html", "head"] and tag not in [
-                    "/head"] + self.HEAD_TAGS
-            ):
-                self.add_tag("/head")
-            else:
-                break
-
-    def get_attributes(self, text):
-        """Return the tag and attributes from a string."""
-        parts = text.split()
-        current = ""
-        attributes = {}
-        tag = parts[0].casefold()
-
-        
-        single_quote, double_quote, swap = False, False, False
-        for c in text:
-            if c == "'" and not double_quote:
-                single_quote = not single_quote
-                if not single_quote:
-                    swap = True
-            elif c == '"' and not single_quote:
-                double_quote = not double_quote
-                if not double_quote:
-                    swap = True
-            elif c == " " and not single_quote and not double_quote or swap:
-                swap = False
-                parts.append(current)
-                current = ""
-                # Edge case: If there is no space between the end of the quote and the next attribute
-                if c != " ":
-                    current += c
-            else:
-                current += c
-        if current:
-            parts.append(current)
-        
-
-        for attrpair in parts[1:]:
-            if "=" in attrpair:
-                key, value = attrpair.split("=", 1)
-                attributes[key.casefold()] = value               
-                if len(value) > 2 and value[0] in ["", "\""]:
-                    value = value[1:-1]
-            else:
-                attributes[attrpair.casefold()] = ""
-        return tag, attributes
-
-    def parse(self):
-        """Show the body of the HTML page, without the tags."""
-        buffer = ""
-        in_script, in_tag, is_comment, double_in_quote, single_in_quote = False, False, False, False, False
-        count = 0
-
-        # So we can determine whether or not we are inside a comment
-        for i, c in enumerate(self.body):
-            if c == '"' and not single_in_quote and in_tag:
-                double_in_quote = not double_in_quote
-            if c == "'" and not double_in_quote and in_tag:
-                single_in_quote = not single_in_quote
-            if count > 0:
-                count -= 1
-            elif c == "<" and not single_in_quote and not double_in_quote:
-                if self.body[i + 1: i + 9] == "/script>":
-                    in_tag = True
-                    in_script = False
-                elif in_script:
-                    buffer += c
-                    continue
-                elif self.body[i + 1: i + 4] == "!--":
-                    is_comment = True
-                    count = 5
-                in_tag = True
-                if buffer:
-                    self.add_text(buffer)
-                buffer = ""
-            elif c == ">" and not single_in_quote and not double_in_quote:
-                if in_script:
-                    buffer += c
-                    continue
-                in_tag = False
-                if self.body[i - 2: i] == "--":
-                    is_comment = False
-                elif not is_comment:
-                    if buffer == "script":
-                        in_script = True
-                    elif buffer == "/script":
-                        in_script = False
-                    self.add_tag(buffer)
-                    buffer = ""
-            else:
-                if not is_comment:
-                    buffer += c
-        if not in_tag and buffer:
-            self.add_text(buffer)
-        return self.finish()
-
-    def finish(self):
-        if not self.unfinished:
-            self.implicit_tags(None)
-        while len(self.unfinished) > 1:
-            node = self.unfinished.pop()
-            parent = self.unfinished[-1]
-            parent.children.append(node)
-        return self.unfinished.pop()
-
-    def add_text(self, text):
-        if text.isspace():
-            return
-        self.implicit_tags(None)
-        parent = self.unfinished[-1]
-        node = Text(text, parent)
-        parent.children.append(node)
-
-    def add_tag(self, tag):
-        if tag.startswith("!"):
-            return
-        bob = []
-        '''
-        if tag == "": 0/0
-        '''
-        tag, attributes = self.get_attributes(tag)
-        
-        if tag.startswith("<!"):
-            return
-        self.implicit_tags(tag)
-        if tag.startswith("/"):
-            if len(self.unfinished) == 1:
-                return
-            node = self.unfinished.pop()
-            parent = self.unfinished[-1]
-            parent.children.append(node)
-        elif tag in self.SELF_CLOSING_TAGS:
-
-            parent = self.unfinished[-1]
-            node = Element(tag, attributes, parent)
-            # attribute added here
-            parent.children.append(node)
-        else:
-            if tag == "p":
-                for i, unfinished_tag in enumerate(self.unfinished):
-                    if unfinished_tag.tag == "p":
-                        if i == len(self.unfinished) - 1:
-                            u_parent = self.unfinished[i - 1]
-                            u_parent.children.append(unfinished_tag)
-                            del self.unfinished[i]
-                        else:
-                            for j in range(len(self.unfinished) - 1, i, -1):
-                                u_parent = self.unfinished[j - 1]
-                                u_parent.children.append(self.unfinished[j])
-                                unf = self.unfinished[j]
-                                bob.append(
-                                    Element(unf.tag, unf.attributes, unf.parent))
-                                del self.unfinished[j]
-                            u_parent = self.unfinished[i - 1]
-                            u_parent.children.append(unfinished_tag)
-                            del self.unfinished[i]
-            parent = self.unfinished[-1] if self.unfinished else None
-            node = Element(tag, attributes, parent)
-            self.unfinished.append(node)
-            while bob:
-                self.unfinished.append(bob.pop())
 
 
 class Browser:
