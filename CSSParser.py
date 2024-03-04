@@ -31,7 +31,13 @@ class CSSParser:
         self.whitespace()
         self.literal(":")
         self.whitespace()
-        val = self.word()
+        #val = self.word()
+        if prop.casefold() == "font":  # handle font shorthand properties
+            i = self.i
+            self.ignore_until([";", "}"])
+            val = self.s[i:self.i].strip()
+        else:
+            val = self.word()
         return prop.casefold(), val
 
     def body(self):
@@ -39,7 +45,36 @@ class CSSParser:
         while self.i < len(self.s) and self.s[self.i] != "}":
             try:
                 prop, val = self.pair()
-                pairs[prop.casefold()] = val
+               # pairs[prop.casefold()] = val
+                if prop.casefold() == 'font':
+                    #i = self.i
+                    split_values = val.split()
+                    if(len(split_values) == 1):
+                        pairs["font-family"] = split_values[0]
+                    elif(len(split_values) == 2):
+                        pairs["font-size"] = split_values[0]
+                        pairs["font-family"] = split_values[1]
+                    elif(len(split_values) == 3):
+                        if(split_values[0] == "italic"):
+                            pairs["font-style"] = split_values[0]
+                        else:
+                            pairs["font-weight"] = split_values[0]
+                        pairs["font-size"] = split_values[1]
+                        pairs["font-family"] = split_values[2]
+                    elif(len(split_values) == 4):
+                        pairs["font-style"] = split_values[0]
+                        pairs["font-weight"] = split_values[1]
+                        pairs["font-size"] = split_values[2]
+                        pairs["font-family"] = split_values[3]
+                    elif(len(split_values) > 4):
+                        pairs["font-style"] = split_values[0]
+                        pairs["font-weight"] = split_values[1]
+                        pairs["font-size"] = split_values[2]
+                        font_family = """ """.join(split_values[3:])
+                        pairs["font-family"] = font_family
+                else:
+                    pairs[prop.casefold()] = val
+                #pairs[prop.casefold()] = val
                 self.whitespace()
                 self.literal(";")
                 self.whitespace()
@@ -50,6 +85,7 @@ class CSSParser:
                     self.whitespace()
                 else:
                     break
+            #print('pairs: ', pairs)
         return pairs
 
     def ignore_until(self, chars):
