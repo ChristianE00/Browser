@@ -14,14 +14,12 @@ from Element import Element
 from HTMLParser import HTMLParser
 # NOTE CH7 IMPORTS
 # CH7 GLOBALS
-# NOTE might not need: from helpers import get_font
 from layout import LineLayout, TextLayout
 from draw import DrawRect, DrawText
 from helpers import get_font, FONTS
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
-# FONTS = {}
 BLOCK_ELEMENTS = [
     "html", "body", "article", "section", "nav", "aside",
     "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
@@ -45,20 +43,6 @@ def print_tree(node, indent=0):
     for child in node.children:
         print_tree(child, indent + 2)
 
-
-'''
-def get_font(size, weight, slant, family):
-    key = (size, weight, slant, family)
-
-    # If the font is not in the cache, create it and add it to the cache
-    if key not in FONTS:
-        font = tkinter.font.Font(size=size, weight=weight, slant=slant, family=family)
-        label = tkinter.Label(font=font)
-        FONTS[key] = (font, label)
-    return FONTS[key][0]
-'''
-
-
 def set_parameters(**params):
     """Modify the WIDTH, HEIGHT, HSTEP, VSTEP, SCROLL_STEP parameters"""
     global WIDTH, HEIGHT, HSTEP, VSTEP, SCROLL_STEP
@@ -79,40 +63,6 @@ def paint_tree(layout_object, display_list):
     for child in layout_object.children:
         paint_tree(child, display_list)
 
-
-'''
-class DrawText:
-    def __init__(self, x1, y1, text, font, color):
-        self.top = y1
-        self.left = x1
-        self.text = text
-        self.font = font
-        self.bottom = y1 + font.metrics("linespace")
-        self.color = color
-
-    def __repr__(self):
-        return "DrawText(top={} left={} bottom={} text={} font={})" \
-            .format(self.top, self.left, self.bottom, self.text, self.font)
-
-    def execute(self, scroll, canvas):
-        canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw", fill=self.color)
-
-
-class DrawRect:
-    def __init__(self, x1, y1, x2, y2, color):
-        self.top = y1
-        self.left = x1
-        self.bottom = y2
-        self.right = x2
-        self.color = color
-
-    def __repr__(self):
-        return "DrawRect(top={} left={} bottom={} right={} color={})".format(
-            self.top, self.left, self.bottom, self.right, self.color)
-
-    def execute(self, scroll, canvas):
-        canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
-'''
 
 def style(node, rules):
     node.style = {}
@@ -226,12 +176,6 @@ class BlockLayout:
             rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
             cmds.append(rect)
 
-        '''
-        if self.layout_mode() == "inline":
-            for x, y, word, font, color in self.display_list:
-                cmds.append(DrawText(x, y, word, font, color))
-        '''
-
         return cmds
 
     def layout_mode(self):
@@ -249,7 +193,6 @@ class BlockLayout:
         self.width = self.parent.width
         self.superscript = False
         self.abbr = False
-#        self.display_list = []
 
         # NOTE: don't need to init. display_list, cursor_y, or line fields
         if self.previous:
@@ -275,7 +218,6 @@ class BlockLayout:
         else:
             self.new_line()
             self.recurse(self.node)
-            # self.flush()
 
         for child in self.children:
             child.layout()
@@ -290,18 +232,6 @@ class BlockLayout:
                 self.new_line()
             for child in node.children:
                 self.recurse(child)
-
-    '''
-    def recurse(self, node):
-        if isinstance(node, Text):
-            for word in node.text.split():
-                self.word(node, word)
-        else:
-            if node.tag == "br":
-                self.flush()
-            for child in node.children:
-                self.recurse(child)
-    '''
 
     def token(self, tok):
         if isinstance(tok, Text):
@@ -346,6 +276,7 @@ class BlockLayout:
         family = node.style["font-family"]
         if style == "normal": style = "roman"
         size = int(float(node.style["font-size"][:-2]) * .75)
+
         font = get_font(size, weight, style, family)
         w = font.measure(word)
 
@@ -357,104 +288,6 @@ class BlockLayout:
         text = TextLayout(node, word, line, previous_word)
         line.children.append(text)
         self.cursor_x += w + font.measure(" ")
-
-    '''
-    def word(self, node, word):
-        w = 0
-        # TODO: Make self.{style, weight, size} := {style, weight, size}
-        color = node.style["color"]
-        weight = node.style["font-weight"]
-        style = node.style["font-style"]
-        family = node.style["font-family"]
-        if style == "normal": style = "roman"
-        size = int(float(node.style["font-size"][:-2]) * .75)
-        font = get_font(size, weight, style, family)
-        self.style = style
-        self.weight = weight
-        self.size = size
-
-        if self.abbr:
-            isLower = None  # Initially, we haven't encountered any character
-            buffer = ""
-            for c in word:
-                currentIsLower = c.islower()
-                if isLower is None:
-                    isLower = (
-                        currentIsLower  # Set initial case based on the first character
-                    )
-
-                if currentIsLower != isLower:
-                    if isLower:  # If the previous chunk was lowercase
-                        font = get_font(self.size // 2, "bold", self.style, family)
-                        transformed_buffer = buffer.upper()
-                    else:  # If the previous chunk was uppercase
-                        font = get_font(self.size, self.weight, self.style, family)
-                        transformed_buffer = buffer
-
-                    w = font.measure(transformed_buffer)
-                    self.line.append(
-                        (self.cursor_x, transformed_buffer, font, self.superscript)
-                    )
-                    self.cursor_x += w
-
-                    if c == word[-1]:
-                        self.cursor_x += font.measure(" ")
-
-                    buffer = c
-                    isLower = currentIsLower
-                else:
-                    buffer += c
-            font = get_font(self.size, self.weight, self.style, family)
-            # Handle any remaining characters in the buffer after the loop
-            if buffer:
-                if isLower:
-                    font = get_font(self.size // 2, "bold", self.style, family)
-                    transformed_buffer = buffer.upper()
-                else:
-                    font = get_font(self.size, self.weight, self.style, family)
-                    transformed_buffer = buffer
-
-            w = font.measure(transformed_buffer)
-            self.line.append(
-                (self.cursor_x, transformed_buffer, font, False, color)
-            )
-            self.cursor_x += w + get_font(self.size, self.weight, self.style, family).measure(
-                " "
-            )
-            return
-
-        else:
-            font = get_font(self.size, self.weight, self.style, family)
-        w = font.measure(word)
-        if word == "\n":
-            self.cursor_x, self.cursor_y = HSTEP, self.cursor_y + VSTEP * 2
-            return
-
-        if self.cursor_x + w > self.width:
-            if "\N{SOFT HYPHEN}" in word:
-                words = word.split("\N{SOFT HYPHEN}")
-                word = ""
-                for current_word in words:
-                    if (
-                        self.cursor_x
-                        + font.measure(word + "-")
-                        + font.measure(current_word)
-                        <= WIDTH - HSTEP
-                    ):
-                        word += current_word
-                    else:
-                        self.word(word + "-")
-                        self.flush()
-                        word = current_word
-                self.word(word)
-                return
-            else:
-                self.flush()
-                self.cursor_y += font.metrics("linespace") * 1.25
-                self.cursor_x = HSTEP
-        self.line.append((self.cursor_x, word, font, False, color))
-        self.cursor_x += w + font.measure(" ")
-    '''
 
 
 class Tag:

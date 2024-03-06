@@ -43,7 +43,7 @@ class LineLayout:
             word.y = baseline - word.font.metrics("ascent")
         max_descent = max([word.font.metrics("descent") for word in self.children])
 
-        # NOTE: since each line now has it's own layout object, we need to
+        # NOTE: since each line now has its own layout object, we need to
         # calculate the line's height
         self.height = 1.25 * (max_ascent + max_descent)
 
@@ -55,9 +55,9 @@ class TextLayout:
         self.children = []
         self.parent = parent
         self.previous = previous
-        self.font = None
+        self.font  = None
         self.width = None
-        self.x = None
+        self.x     = None
 
 
     def paint(self):
@@ -70,6 +70,7 @@ class TextLayout:
         family = self.node.style["font-family"]
 
         if style == "normal": style = "roman"
+
         # 1: First calculate word size
         size = int(float(self.node.style["font-size"][:-2]) * .75)
         self.font = get_font(size, weight, style, family)
