@@ -12,8 +12,9 @@ from classselector import ClassSelector
 from Text import Text
 from Element import Element
 from HTMLParser import  HTMLParser
-
-# GLOBALS
+#NOTE CH7 IMPORTS
+# CH7 GLOBALS
+from layout import LineLayout, TextLayout
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
@@ -209,7 +210,7 @@ class BlockLayout:
             cmds.append(rect)
 
         if isinstance(self.node, Element) and self.node.tag == "li":
-            rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2), 
+            rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2),
                 self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
             cmds.append(rect)
 
@@ -248,18 +249,19 @@ class BlockLayout:
 
 
     def layout(self):
+
         self.x = self.parent.x
         self.width = self.parent.width
         self.superscript = False
         self.abbr = False
-        self.display_list = []
+#        self.display_list = []
         mode = self.layout_mode()
-
+        #NOTE: don't need to init. display_list, cursor_y, or line fields
         if self.previous:
             self.y = self.previous.y + self.previous.height
         else:
             self.y = self.parent.y
-                    
+
         if isinstance(self.node, Element) and self.node.tag == "li":
             self.x = self.parent.x + (2 *HSTEP)
             self.width = self.parent.width - (2 * HSTEP)
@@ -274,20 +276,26 @@ class BlockLayout:
                 self.children.append(next)
                 previous = next
         else:
-            self.cursor_x, self.cursor_y = 0, 0 
+            '''
+            self.cursor_x, self.cursor_y = 0, 0
+            self.cursor_x = 0
             self.line = []
+            '''
+            self.new_line()
             self.recurse(self.node)
-            self.flush()
+            #self.flush()
 
         for child in self.children:
             child.layout()
         for child in self.children:
             self.display_list.extend(child.display_list)
+        self.height = sum([child.height for child in self.children])
+        '''
         if mode == "block":
             self.height = sum([child.height for child in self.children])
         else:
             self.height = self.cursor_y
-
+        '''
 
     def recurse(self, node):
         if isinstance(node, Text):
@@ -330,7 +338,19 @@ class BlockLayout:
         self.cursor_x = 0
         self.line = []
 
+    def new_line(self):
+        """Creates a new line and resets some files"""
+        self.cursor_x = 0
+        last_line = self.children[-1] if self.children else None
+        new_line = LineLayout(self.node, self, last_line)
+        self.children.append(new_line)
 
+    def word(self, node, word):
+        if self.cursor_x + w > self.width:
+            self.new_line()
+
+
+    '''
     def word(self, node, word):
         w = 0
         # TODO: Make self.{style, weight, size} := {style, weight, size}
@@ -426,7 +446,7 @@ class BlockLayout:
                 self.cursor_x = HSTEP
         self.line.append((self.cursor_x, word, font, False, color))
         self.cursor_x += w + font.measure(" ")
-
+    '''
 
 class Tag:
     """A simple class to represent a tag token."""
@@ -536,8 +556,8 @@ class Browser:
                 continue
             self.canvas.create_text(
                 x, y - self.scroll, text=c, font=d, anchor="nw")
-   
-            
+
+
         if self.display_list and self.display_list[-1][1] > HEIGHT:
             self.canvas.create_rectangle(
                 WIDTH - 8,
@@ -626,7 +646,7 @@ class URL:
             self.port = None
 
     def __repr__(self):
-        return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')" 
+        return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')"
 
     def format_headers(self, headers):
         """Format the given header dictionary into a string."""
@@ -655,7 +675,7 @@ class URL:
         ).encode("utf8")
         return base_headers
 
-    
+
     def resolve(self, url):
         if "://" in url: return URL(url)
         if not url.startswith("/"):
