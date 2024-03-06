@@ -11,14 +11,15 @@ from CSSParser import CSSParser
 from classselector import ClassSelector
 from Text import Text
 from Element import Element
-from HTMLParser import  HTMLParser
-#NOTE CH7 IMPORTS
+from HTMLParser import HTMLParser
+# NOTE CH7 IMPORTS
 # CH7 GLOBALS
+# NOTE might not need: from helpers import get_font
 from layout import LineLayout, TextLayout
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
-FONTS = {}
+# FONTS = {}
 BLOCK_ELEMENTS = [
     "html", "body", "article", "section", "nav", "aside",
     "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
@@ -43,6 +44,7 @@ def print_tree(node, indent=0):
         print_tree(child, indent + 2)
 
 
+'''
 def get_font(size, weight, slant, family):
     key = (size, weight, slant, family)
 
@@ -52,6 +54,7 @@ def get_font(size, weight, slant, family):
         label = tkinter.Label(font=font)
         FONTS[key] = (font, label)
     return FONTS[key][0]
+'''
 
 
 def set_parameters(**params):
@@ -84,11 +87,9 @@ class DrawText:
         self.bottom = y1 + font.metrics("linespace")
         self.color = color
 
-
     def __repr__(self):
         return "DrawText(top={} left={} bottom={} text={} font={})" \
             .format(self.top, self.left, self.bottom, self.text, self.font)
-
 
     def execute(self, scroll, canvas):
         canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw", fill=self.color)
@@ -102,11 +103,9 @@ class DrawRect:
         self.right = x2
         self.color = color
 
-
     def __repr__(self):
         return "DrawRect(top={} left={} bottom={} right={} color={})".format(
             self.top, self.left, self.bottom, self.right, self.color)
-
 
     def execute(self, scroll, canvas):
         canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
@@ -164,14 +163,11 @@ class DocumentLayout:
         self.children = []
         self.x, self.y, self.width, self.height = None, None, None, None
 
-
     def __repr__(self):
         return "DocumentLayout()"
 
-
     def paint(self):
         return []
-
 
     def layout(self):
         self.width = WIDTH - 2*HSTEP
@@ -183,9 +179,7 @@ class DocumentLayout:
         self.height = child.height
 
 
-
-
-#NOTE: Doesn't seem to be creating all the child blocks
+# NOTE: Doesn't seem to be creating all the child blocks
 #       Only 2 BlockLayouts are working <html>, <body>
 class BlockLayout:
 
@@ -222,20 +216,17 @@ class BlockLayout:
             cmds.append(rect)
         '''
 
-        if isinstance(self.node, Element) and self.node.tag =="nav" \
+        if isinstance(self.node, Element) and self.node.tag == "nav" \
         and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
             x2, y2 = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
             cmds.append(rect)
-
-
 
         if self.layout_mode() == "inline":
             for x, y, word, font, color in self.display_list:
                 cmds.append(DrawText(x, y, word, font, color))
 
         return cmds
-
 
     def layout_mode(self):
         if isinstance(self.node, Text):
@@ -247,28 +238,26 @@ class BlockLayout:
         else:
             return "block"
 
-
     def layout(self):
-
         self.x = self.parent.x
         self.width = self.parent.width
         self.superscript = False
         self.abbr = False
 #        self.display_list = []
         mode = self.layout_mode()
-        #NOTE: don't need to init. display_list, cursor_y, or line fields
+        # NOTE: don't need to init. display_list, cursor_y, or line fields
         if self.previous:
             self.y = self.previous.y + self.previous.height
         else:
             self.y = self.parent.y
 
         if isinstance(self.node, Element) and self.node.tag == "li":
-            self.x = self.parent.x + (2 *HSTEP)
+            self.x = self.parent.x + (2 * HSTEP)
             self.width = self.parent.width - (2 * HSTEP)
         else:
             self.x = self.parent.x
             self.width = self.parent.width
-        #NOTE: Thinks <body>
+        # NOTE: Thinks <body>
         if mode == "block":
             previous = None
             for child in self.node.children:
@@ -283,7 +272,7 @@ class BlockLayout:
             '''
             self.new_line()
             self.recurse(self.node)
-            #self.flush()
+            # self.flush()
 
         for child in self.children:
             child.layout()
@@ -307,12 +296,10 @@ class BlockLayout:
             for child in node.children:
                 self.recurse(child)
 
-
     def token(self, tok):
         if isinstance(tok, Text):
             for word in tok.text.split():
                 self.word(word)
-
 
     def flush(self, center=False):
         if not self.line:
@@ -332,7 +319,7 @@ class BlockLayout:
 
         max_descent = max([font.metrics("descent")
                           for x, word, font, s, color in self.line])
-        #NOTE: might need to be replaced
+        # NOTE: might need to be replaced
         self.height_of_firstline = (1.25 * max_descent) + (1.25 * max_ascent)
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = 0
@@ -346,9 +333,9 @@ class BlockLayout:
         self.children.append(new_line)
 
     def word(self, node, word):
+        # NOTE fix what 'w' is
         if self.cursor_x + w > self.width:
             self.new_line()
-
 
     '''
     def word(self, node, word):
@@ -448,6 +435,7 @@ class BlockLayout:
         self.cursor_x += w + font.measure(" ")
     '''
 
+
 class Tag:
     """A simple class to represent a tag token."""
 
@@ -470,11 +458,13 @@ class Browser:
             height=HEIGHT,
             bg="white"
         )
-       # self.entry = tkinter.Entry(self.window)
- #       self.entry.bind("<Return>", self.on_submit)
- #       self.text_showing = False
-  #      self.window.bind("<Configure>", self.resize)
-        #self.canvas.pack(fill=tkinter.BOTH, expand=0)
+
+        # self.entry = tkinter.Entry(self.window)
+        # self.entry.bind("<Return>", self.on_submit)
+        # self.text_showing = False
+        # self.window.bind("<Configure>", self.resize)
+        # self.canvas.pack(fill=tkinter.BOTH, expand=0)
+
         self.canvas.pack()
         GRINNING_FACE_IMAGE = tkinter.PhotoImage(file="openmoji/1F600.png")
         EMOJIS["\N{GRINNING FACE}"] = GRINNING_FACE_IMAGE
@@ -537,7 +527,7 @@ class Browser:
                 self.scroll -= SCROLL_STEP
                 self.draw()
         else:
-            max_y = max(self.document.height + 2*VSTEP - HEIGHT, 0)
+            max_y = max(self.document.height + 2 * VSTEP - HEIGHT, 0)
             self.scroll = min(self.scroll + SCROLL_STEP, max_y)
             self.draw()
 
@@ -596,7 +586,7 @@ class Browser:
                 try:
                     body = url.resolve(link).request()
                 # ignore stylesheets that fail to download
-                except:
+                except Exception:
                     continue
                 rules.extend(CSSParser(body).parse())
 
@@ -675,7 +665,6 @@ class URL:
         ).encode("utf8")
         return base_headers
 
-
     def resolve(self, url):
         if "://" in url: return URL(url)
         if not url.startswith("/"):
@@ -690,7 +679,6 @@ class URL:
         else:
             return URL(self.scheme + "://" + self.host + \
                        ":" + str(self.port) + url)
-
 
     def cache_response(self, url, headers, body):
         """Cache the response from the server if possible."""
@@ -820,6 +808,8 @@ class URL:
             response_headers = self.read_headers(response)
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
+
+            '''
             encoding_response = response_headers.get("content-type", "utf8")
             encoding_position = encoding_response.find("charset=")
             encoding = (
@@ -827,6 +817,7 @@ class URL:
                 if encoding_position != -1
                 else "utf8"
             )
+            '''
 
             # check if response is cacheable and cache it if it is
             if "cache-control" in response_headers:
@@ -846,10 +837,10 @@ class URL:
 
 if __name__ == "__main__":
     import sys
-    """
+    '''
     body = URL(sys.argv[1]).request()
     nodes = HTMLParser(body).parse()
     print_tree(nodes)
-    """
+    '''
     Browser().load(URL(sys.argv[1]))
     tkinter.mainloop()
