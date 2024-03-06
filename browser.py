@@ -16,6 +16,8 @@ from HTMLParser import HTMLParser
 # CH7 GLOBALS
 # NOTE might not need: from helpers import get_font
 from layout import LineLayout, TextLayout
+from draw import DrawRect, DrawText
+from helpers import get_font, FONTS
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
@@ -78,6 +80,7 @@ def paint_tree(layout_object, display_list):
         paint_tree(child, display_list)
 
 
+'''
 class DrawText:
     def __init__(self, x1, y1, text, font, color):
         self.top = y1
@@ -109,7 +112,7 @@ class DrawRect:
 
     def execute(self, scroll, canvas):
         canvas.create_rectangle(self.left, self.top - scroll, self.right, self.bottom - scroll, width=0, fill=self.color)
-
+'''
 
 def style(node, rules):
     node.style = {}
@@ -175,7 +178,7 @@ class DocumentLayout:
         child = BlockLayout(self.node, self, None)
         self.children.append(child)
         child.layout()
-        self.display_list = child.display_list
+        #self.display_list = child.display_list
         self.height = child.height
 
 
@@ -203,6 +206,7 @@ class BlockLayout:
             rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
             cmds.append(rect)
 
+
         if isinstance(self.node, Element) and self.node.tag == "li":
             rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2),
                 self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
@@ -222,9 +226,11 @@ class BlockLayout:
             rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
             cmds.append(rect)
 
+        '''
         if self.layout_mode() == "inline":
             for x, y, word, font, color in self.display_list:
                 cmds.append(DrawText(x, y, word, font, color))
+        '''
 
         return cmds
 
@@ -244,7 +250,7 @@ class BlockLayout:
         self.superscript = False
         self.abbr = False
 #        self.display_list = []
-        mode = self.layout_mode()
+
         # NOTE: don't need to init. display_list, cursor_y, or line fields
         if self.previous:
             self.y = self.previous.y + self.previous.height
@@ -258,6 +264,8 @@ class BlockLayout:
             self.x = self.parent.x
             self.width = self.parent.width
         # NOTE: Thinks <body>
+
+        mode = self.layout_mode()
         if mode == "block":
             previous = None
             for child in self.node.children:
@@ -265,27 +273,25 @@ class BlockLayout:
                 self.children.append(next)
                 previous = next
         else:
-            '''
-            self.cursor_x, self.cursor_y = 0, 0
-            self.cursor_x = 0
-            self.line = []
-            '''
             self.new_line()
             self.recurse(self.node)
             # self.flush()
 
         for child in self.children:
             child.layout()
-        for child in self.children:
-            self.display_list.extend(child.display_list)
         self.height = sum([child.height for child in self.children])
-        '''
-        if mode == "block":
-            self.height = sum([child.height for child in self.children])
-        else:
-            self.height = self.cursor_y
-        '''
 
+    def recurse(self, node):
+        if isinstance(node, Text):
+            for word in node.text.split():
+                self.word(node, word)
+        else:
+            if node.tag == "br":
+                self.new_line()
+            for child in node.children:
+                self.recurse(child)
+
+    '''
     def recurse(self, node):
         if isinstance(node, Text):
             for word in node.text.split():
@@ -295,6 +301,7 @@ class BlockLayout:
                 self.flush()
             for child in node.children:
                 self.recurse(child)
+    '''
 
     def token(self, tok):
         if isinstance(tok, Text):
@@ -334,8 +341,22 @@ class BlockLayout:
 
     def word(self, node, word):
         # NOTE fix what 'w' is
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        family = node.style["font-family"]
+        if style == "normal": style = "roman"
+        size = int(float(node.style["font-size"][:-2]) * .75)
+        font = get_font(size, weight, style, family)
+        w = font.measure(word)
+
         if self.cursor_x + w > self.width:
             self.new_line()
+
+        line = self.children[-1]
+        previous_word = line.children[-1] if line.children else None
+        text = TextLayout(node, word, line, previous_word)
+        line.children.append(text)
+        self.cursor_x += w + font.measure(" ")
 
     '''
     def word(self, node, word):
