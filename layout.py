@@ -15,6 +15,10 @@ class LineLayout:
         self.width = None
         self.height = None
 
+    def __repr__(self):
+        return "LineLayout(x={}, y={}, width={}, height={})".format(
+            self.x, self.y, self.width, self.height)
+
     def paint(self):
         return []
 
@@ -59,6 +63,10 @@ class TextLayout:
         self.width = None
         self.x     = None
 
+    def __repr__(self):
+        return ("TextLayout(x={}, y={}, width={}, height={}, " +
+            "word={})").format(
+            self.x, self.y, self.width, self.height, self.word)
 
     def paint(self):
         color = self.node.style["color"]

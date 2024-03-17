@@ -15,9 +15,9 @@ from HTMLParser import HTMLParser
 # NOTE CH7 IMPORTS
 # CH7 GLOBALS
 from layout import LineLayout, TextLayout
-from draw import DrawRect, DrawText
-from helpers import get_font, FONTS
-WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
+from draw import DrawRect, DrawText, Rect
+from helpers import get_font, FONTS, WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP
+
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
 BLOCK_ELEMENTS = [
@@ -148,14 +148,19 @@ class BlockLayout:
         return "BlockLayout(x={}, y={}, width={}, height={})".format(
             self.x, self.y, self.width, self.height)
 
+    def self_rect(self):
+        return Rect(self.x, self.y,
+            self.x + self.width, self.y + self.height)
+
     def paint(self):
         cmds = []
         bgcolor = self.node.style.get("background-color", "transparent")
         if bgcolor != "transparent":
-            x2, y2, = self.x + self.width, self.y + self.height
-            rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+            #x2, y2, = self.x + self.width, self.y + self.height
+            #rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+            rect = DrawRect(self.self_rect(), bgcolor)
             cmds.append(rect)
-
+        return cmds # NOTE: might be a bug
 
         if isinstance(self.node, Element) and self.node.tag == "li":
             rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2),
@@ -313,6 +318,7 @@ class Browser:
             bg="white"
         )
 
+
         # self.entry = tkinter.Entry(self.window)
         # self.entry.bind("<Return>", self.on_submit)
         # self.text_showing = False
@@ -324,10 +330,54 @@ class Browser:
         EMOJIS["\N{GRINNING FACE}"] = GRINNING_FACE_IMAGE
         self.scroll, self.last_y = 0, 0
         self.scrolling = False
-        self.window.bind("<Down>", self.scrolldown)
-        self.window.bind("<MouseWheel>", self.scrolldown)
+        '''
         self.window.bind(":", self.command_mode)
         self.window.bind("<Escape>", self.insert_mode)
+        '''
+        self.window.bind("<Down>", self.handle_down)
+        self.window.bind("<MouseWheel>", self.handle_down)
+        self.window.bind("<Button-1>", self.handle_click)
+        self.window.bind("<Key>", self.handle_key)
+        self.window.bind("<Return>", self.handle_enter)
+
+        self.url = None
+        self.tabs = []
+        self.active_tab = None
+        self.chrome = Chrome(self)
+
+    def new_tab(self, url):
+        new_tab = Tab(HEIGHT - self.chrome.bottom)
+        new_tab.load(url)
+        self.active_tab = new_tab
+        self.tabs.append(new_tab)
+        self.draw()
+
+    def handle_enter(self, e):
+        self.chrome.enter()
+        self.draw()
+
+    def handle_key(self, e):
+        if len(e.char) == 0: return
+        if not (0x20 <= ord(e.char) < 0x7f): return
+        self.chrome.keypress(e.char)
+        self.draw()
+
+    def handle_click(self, e):
+        """ Forward click to the active tab """
+        if e.y < self.chrome.bottom:
+            self.chrome.click(e.x, e.y)
+        else:
+            tab_y = e.y - self.chrome.bottom
+            self.active_tab.click(e.x, tab_y)
+        self.draw()
+
+    def handle_down(self, e):
+        """ Forward scroll  to the active tab"""
+        delta = e.delta
+        self.active_tab.scrolldown(delta)
+        self.draw()
+
+    
 
     def command_mode(self, e):
         if not self.text_showing:
@@ -359,40 +409,24 @@ class Browser:
         global WIDTH, HEIGHT
         WIDTH, HEIGHT = e.width, e.height
 
-    def scrolldown(self, e):
-        """Scroll down by SCROLL_STEP pixels."""
-        # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
-        delta = (
-            e.delta / 120
-            if hasattr(e, "delta")
-            and e.delta is not None
-            and platform.system() == "Darwin"
-            else e.delta if hasattr(e, "delta") else None
-        )
-        # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
-        # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
-        #      On Linux you need to use differenct events to scroll up and scroll down
-        # Scroll up
 
-        if (delta is not None and delta > 0) or (
-            hasattr(e, "keysym") and e.keysym == "Up"
-        ):
-            if self.scroll > 0:
-                self.scroll -= SCROLL_STEP
-                self.draw()
-        else:
-            max_y = max(self.document.height + 2 * VSTEP - HEIGHT, 0)
-            self.scroll = min(self.scroll + SCROLL_STEP, max_y)
-            self.draw()
+
 
     def draw(self):
         self.canvas.delete("all")
+        self.active_tab.draw(self.canvas, self.chrome.bottom)
+        cmds = self.chrome.paint()
+        for cmd in cmds:
+            cmd.execute(0, self.canvas)
+
+        '''
         for cmd in self.display_list:
             if cmd.top > self.scroll + HEIGHT:
                 continue
             if cmd.bottom < self.scroll:
                 continue
             cmd.execute(self.scroll, self.canvas)
+        '''
 
         '''
             if c in EMOJIS:
@@ -413,42 +447,7 @@ class Browser:
             )
         '''
 
-    def load(self, url, view_source: Optional[bool] = False):
-        """Load the given URL and convert text tags to character tags."""
-        # Note: Test for testing extra headers
 
-        body = url.request()
-
-        if view_source:
-            print(body)
-        else:
-            DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
-            self.nodes = HTMLParser(body).parse()
-
-            # Gather all the relative URL for each linked style sheet
-            links = [node.attributes["href"]
-                     for node in tree_to_list(self.nodes, [])
-                     if isinstance(node, Element)
-                     and node.tag == "link"
-                     and node.attributes.get("rel") == "stylesheet"
-                     and "href" in node.attributes]
-            self.document = DocumentLayout(self.nodes)
-            rules = DEFAULT_STYLE_SHEET.copy()
-
-            # Convert relative URLs to full URLS:
-            for link in links:
-                try:
-                    body = url.resolve(link).request()
-                # ignore stylesheets that fail to download
-                except Exception:
-                    continue
-                rules.extend(CSSParser(body).parse())
-
-            style(self.nodes, sorted(rules, key=cascade_priority))
-            self.document.layout()
-            self.display_list = []
-            paint_tree(self.document, self.display_list)
-            self.draw()
 
 
 class URL:
@@ -491,6 +490,14 @@ class URL:
 
     def __repr__(self):
         return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')"
+
+    def __str__(self):
+        port_part = ":" + str(self.port)
+        if self.scheme == "https" and self.port == 443:
+            port_part = ""
+        if self.scheme == "http" and self.port == 80:
+            port_part = ""
+        return self.scheme + "://" + self.host + port_part + self.path
 
     def format_headers(self, headers):
         """Format the given header dictionary into a string."""
@@ -689,6 +696,275 @@ class URL:
             return body
 
 
+
+
+class DrawOutline:
+    def __init__(self, rect, color, thickness):
+        self.rect = rect
+        self.color = color
+        self.thickness = thickness
+
+    def execute(self, scroll, canvas):
+        canvas.create_rectangle(
+            self.rect.left, self.rect.top - scroll,
+            self.rect.right, self.rect.bottom - scroll,
+            width=self.thickness,
+            outline=self.color)
+class DrawLine:
+#    def __init__(self, rect, color, thickness):
+    def __init__(self, x1, y1, x2, y2, color, thickness):
+        #self.rect = rect
+        self.rect = Rect(x1, y1, x2, y2)
+        self.color = color
+        self.thickness = thickness
+    
+    def execute(self, scroll, canvas):
+        canvas.create_line(
+            self.rect.left, self.rect.top - scroll,
+            self.rect.right, self.rect.bottom - scroll,
+            fill=self.color, width=self.thickness)
+
+class Chrome:
+    def __init__(self, browser):
+        self.browser = browser
+        self.font = get_font(20, 'normal', 'roman', 'Courier' )
+        self.font_height = self.font.metrics('linespace')
+        self.padding = 5
+        self.tabbar_top = 0
+        self.tabbar_bottom = self.font_height + 2*self.padding
+        plus_width = self.font.measure("+") + 2*self.padding
+        self.newtab_rect = Rect(
+            self.padding, self.padding,
+            self.padding + plus_width,
+            self.padding + self.font_height)
+
+        self.urlbar_top = self.tabbar_bottom
+        self.urlbar_bottom = self.urlbar_top + \
+            self.font_height + 2*self.padding
+        self.bottom = self.urlbar_bottom
+
+        back_width = self.font.measure("<") + 2*self.padding
+        self.back_rect = Rect(
+            self.padding,
+            self.urlbar_top + self.padding,
+            self.padding + back_width,
+            self.urlbar_bottom - self.padding)
+
+        self.address_rect = Rect(
+            self.back_rect.top + self.padding,
+            self.urlbar_top + self.padding,
+            WIDTH - self.padding,
+            self.urlbar_bottom - self.padding)
+        
+        self.focus = None
+        self.address_bar = ""
+        
+
+    def click(self, x, y):
+        self.focus = None
+        # Check if click is a new tab or an open tab
+        if self.newtab_rect.containsPoint(x, y):
+            self.browser.new_tab(URL("https://browser.engineering/"))
+
+        elif self.back_rect.containsPoint(x, y):
+            self.browser.active_tab.go_back()
+
+        elif self.address_rect.containsPoint(x, y):
+            self.focus = "address bar"
+            self.address_bar = ""
+
+        else:
+            for i, tab in enumerate(self.browser.tabs):
+                if self.tab_rect(i).containsPoint(x, y):
+                    self.browser.active_tab = tab
+                    break
+
+    def keypress(self, char):
+        if self.focus == "address bar":
+            self.address_bar += char
+
+    def enter(self):
+        if self.focus == "address bar":
+            self.browser.active_tab.load(URL(self.address_bar))
+            self.focus = None
+
+
+    def paint(self):
+        cmds = []
+        # Draw white rectangle behind chrome to ensure that Chrome is always on top of tab
+        cmds.append(DrawRect(
+            Rect(0, 0, WIDTH, self.bottom),
+            "white"))
+        cmds.append(DrawLine(
+            0, self.bottom, WIDTH,
+            self.bottom, "black", 1))
+
+        cmds.append(DrawOutline(self.newtab_rect, "black", 1))
+        cmds.append(DrawText(self.newtab_rect.left + self.padding, self.newtab_rect.top, "+", self.font, "black"))
+        for i, tab in enumerate(self.browser.tabs):
+            bounds = self.tab_rect(i)
+            cmds.append(DrawLine(
+                bounds.left, 0, bounds.left, bounds.bottom,
+                "black", 1))
+            cmds.append(DrawLine(
+                bounds.right, 0, bounds.right, bounds.bottom,
+                "black", 1))
+            cmds.append(DrawText(
+                bounds.left + self.padding, bounds.top + self.padding , "tab {}".format(i), self.font, "black"))
+
+            if tab == self.browser.active_tab:
+                cmds.append(DrawLine(
+                    0, bounds.bottom, bounds.left, bounds.bottom,
+                    "black", 1))
+                cmds.append(DrawLine(
+                    bounds.right, bounds.bottom, WIDTH, bounds.bottom,
+                    "black", 1))
+
+        cmds.append(DrawOutline(self.back_rect, "black", 1))
+        cmds.append(DrawText(
+            self.back_rect.left + self.padding,
+            self.back_rect.top,
+            "<", self.font, "black"))
+
+        cmds.append(DrawOutline(self.address_rect, "black", 1))
+        url = str(self.browser.active_tab.url)
+        cmds.append(DrawText(
+            self.address_rect.left + self.padding,
+            self.address_rect.top,
+            self.address_bar, self.font, "black"))
+
+        if self.focus == "address bar":
+            cmds.append(DrawText(
+                self.address_rect.left + self.padding,
+                self.address_rect.top,
+                self.address_bar, self.font, "black"))
+
+            w = self.font.measure(self.address_bar)
+            cmds.append(DrawLine(
+                self.address_rect.left + self.padding + w,
+                self.address_rect.top,
+                self.address_rect.left + self.padding + w,
+                self.address_rect.bottom,
+                "red", 1))
+        else:
+            url = str(self.browser.active_tab.url)
+            cmds.append(DrawText(
+                self.address_rect.left + self.padding,
+                self.address_rect.top,
+                url, self.font, "black"))
+
+        return cmds
+
+    def tab_rect(self, i):
+        tabs_start = self.newtab_rect.right + self.padding
+        tab_width = self.font.measure("Tab X") + 2*self.padding
+        return Rect(tabs_start + tab_width * i, self.tabbar_top, tabs_start + tab_width * (i + 1), self.tabbar_bottom)
+
+class Tab:
+    def __init__(self, tab_height):
+        self.scroll = 0
+        self.tab_height = tab_height
+        self.history = []
+
+    def draw(self, canvas, offset):
+        for cmd in self.display_list:
+            if cmd.rect.top > self.scroll + self.tab_height:
+                continue
+            if cmd.rect.bottom < self.scroll:
+                continue
+            cmd.execute(self.scroll - offset, canvas)
+
+    def click(self, x_pos, y_pos):
+        x, y = x_pos, y_pos
+
+        y += self.scroll
+
+        objs = [obj for obj in tree_to_list(self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
+        if not objs: return
+        elt = objs[-1].node
+        while elt:
+            if isinstance(elt, Text):
+                pass
+            elif elt.tag == 'a' and 'href' in elt.attributes:
+                url = self.url.resolve(elt.attributes['href'])
+                return self.load(url)
+            elt = elt.parent
+
+    def scrolldown(self, delta):
+        """Scroll down by SCROLL_STEP pixels."""
+        # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
+        '''
+        delta = (
+            e.delta / 120
+            if hasattr(e, "delta")
+            and e.delta is not None
+            and platform.system() == "Darwin"
+            else e.delta if hasattr(e, "delta") else None
+        )
+        '''
+        # Mouse wheel down. On Windows, e.delta < 0 => scroll down.
+        # NOTE: on Windows delta is positive for scroll up. On MacOS divid delta by 120
+        #      On Linux you need to use differenct events to scroll up and scroll down
+        # Scroll up
+        '''
+        if (delta is not None and delta > 0) or (
+            hasattr(e, "keysym") and e.keysym == "Up"
+        ):
+        '''
+        if delta > 0:
+            if self.scroll > 0:
+                self.scroll -= SCROLL_STEP
+                #self.draw()
+        else:
+            max_y = max(self.document.height + 2 * VSTEP - self.tab_height, 0)
+            self.scroll = min(self.scroll + SCROLL_STEP, max_y)
+            #self.draw()
+
+    def go_back(self):
+        if len(self.history) > 1:
+            self.history.pop()
+            back = self.history.pop()
+            self.load(back)
+
+    def load(self, url, view_source: Optional[bool] = False):
+        """Load the given URL and convert text tags to character tags."""
+        # Note: Test for testing extra headers
+        body = url.request()
+        self.url = url
+        self.history.append(url)
+        if view_source:
+            print(body)
+        else:
+            DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
+            self.nodes = HTMLParser(body).parse()
+
+            # Gather all the relative URL for each linked style sheet
+            links = [node.attributes["href"]
+                     for node in tree_to_list(self.nodes, [])
+                     if isinstance(node, Element)
+                     and node.tag == "link"
+                     and node.attributes.get("rel") == "stylesheet"
+                     and "href" in node.attributes]
+            self.document = DocumentLayout(self.nodes)
+            rules = DEFAULT_STYLE_SHEET.copy()
+
+            # Convert relative URLs to full URLS:
+            for link in links:
+                try:
+                    body = url.resolve(link).request()
+                # ignore stylesheets that fail to download
+                except Exception:
+                    continue
+                rules.extend(CSSParser(body).parse())
+
+            style(self.nodes, sorted(rules, key=cascade_priority))
+            self.document.layout()
+            self.display_list = []
+            paint_tree(self.document, self.display_list)
+            #self.draw()
+    def __repr__(self):
+        return "Tab(history={})".format(self.history)
+
 if __name__ == "__main__":
     import sys
     '''
@@ -696,5 +972,6 @@ if __name__ == "__main__":
     nodes = HTMLParser(body).parse()
     print_tree(nodes)
     '''
-    Browser().load(URL(sys.argv[1]))
+    #Browser().load(URL(sys.argv[1]))
+    Browser().new_tab(URL(sys.argv[1]))
     tkinter.mainloop()
