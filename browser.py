@@ -339,11 +339,31 @@ class Browser:
         self.window.bind("<Button-1>", self.handle_click)
         self.window.bind("<Key>", self.handle_key)
         self.window.bind("<Return>", self.handle_enter)
+        self.window.bind("<BackSpace>", self.handle_backspace)
+        self.window.bind("<Button-2>", self.handle_middle_click)
 
         self.url = None
         self.tabs = []
         self.active_tab = None
         self.chrome = Chrome(self)
+
+    def handle_middle_click(self, e):
+        """ Forward click to the active tab """
+        #click within the web page
+        if e.y < self.chrome.bottom:
+            self.chrome.click(e.x, e.y)
+
+        #click within the tab bar
+        else:
+            tab_y = e.y - self.chrome.bottom
+            self.active_tab.middleClick(e.x, tab_y, self)
+        print('focus', self.chrome.focus)
+        self.draw()
+
+
+    def handle_backspace(self, e):
+        self.chrome.backspace()
+        self.draw()
 
     def new_tab(self, url):
         new_tab = Tab(HEIGHT - self.chrome.bottom)
@@ -759,6 +779,9 @@ class Chrome:
         self.focus = None
         self.address_bar = ""
         
+    def backspace(self):
+        self.focus == "address bar"
+        self.address_bar = self.address_bar[:-1] # remove last character
 
     def click(self, x, y):
         self.focus = None
@@ -865,6 +888,26 @@ class Tab:
         self.scroll = 0
         self.tab_height = tab_height
         self.history = []
+
+    def middleClick(self, x_pos, y_pos, browser):
+        #print('entered middleClick')
+        x, y = x_pos, y_pos
+        y += self.scroll
+
+        objs = [obj for obj in tree_to_list(self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
+        if not objs: return
+        elt = objs[-1].node
+        while elt:
+            if isinstance(elt, Text):
+                print('not in href')
+                pass
+            elif elt.tag == 'a' and 'href' in elt.attributes:
+                print(' in ahref')
+                url = self.url.resolve(elt.attributes["href"])
+                browser.new_tab(url)
+                browser.active_tab = self
+                return
+            elt = elt.parent
 
     def draw(self, canvas, offset):
         for cmd in self.display_list:
