@@ -357,7 +357,6 @@ class Browser:
         else:
             tab_y = e.y - self.chrome.bottom
             self.active_tab.middleClick(e.x, tab_y, self)
-        print('focus', self.chrome.focus)
         self.draw()
 
 
@@ -899,10 +898,8 @@ class Tab:
         elt = objs[-1].node
         while elt:
             if isinstance(elt, Text):
-                print('not in href')
                 pass
             elif elt.tag == 'a' and 'href' in elt.attributes:
-                print(' in ahref')
                 url = self.url.resolve(elt.attributes["href"])
                 browser.new_tab(url)
                 browser.active_tab = self
