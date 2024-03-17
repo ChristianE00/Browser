@@ -17,7 +17,7 @@ from HTMLParser import HTMLParser
 from layout import LineLayout, TextLayout
 from draw import DrawRect, DrawText, Rect
 from helpers import get_font, FONTS, WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP
-
+counter = 0
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
 BLOCK_ELEMENTS = [
@@ -35,6 +35,7 @@ INHERITED_PROPERTIES = {
     "font-family": "Times",
     "color": "black",
 }
+
 
 
 def print_tree(node, indent=0):
@@ -351,8 +352,7 @@ class Browser:
         """ Forward click to the active tab """
         #click within the web page
         if e.y < self.chrome.bottom:
-            self.chrome.click(e.x, e.y)
-
+            pass
         #click within the tab bar
         else:
             tab_y = e.y - self.chrome.bottom
@@ -475,13 +475,18 @@ class URL:
     cache = {}
 
     def __init__(self, url):
+        global counter
+        counter += 1
         """Initiate the URL class with a scheme, host, port, and path."""
         self.visited_urls = set()
         self.default_headers = {"User-Agent": "default/1.0"}
+        self.fragment = None
         url = url.strip()
         if "://" in url:
+            #print('url: {}'.format(url))
             self.scheme, url = url.split("://", 1)
             self.scheme = self.scheme.strip()
+            #print('scheme: {}, url: {}'.format(self.scheme, url))
             if "/" in url:
                 self.host, url = url.split("/", 1)
             elif "file" not in self.scheme:
@@ -490,6 +495,8 @@ class URL:
             assert self.scheme in ["http", "https", "file"]
 
             self.path = url
+            if "#" in self.path:
+                self.path , self.fragment = self.path.split("#", 1)
             if "file" in self.scheme:
                 self.port = None
                 return
@@ -501,14 +508,20 @@ class URL:
             elif self.scheme == "https":
                 self.port = 443
             self.path = "/" + self.path
+            
         # Handle inline HTML
         elif "data:" in url:
             self.path = url
             self.scheme, url = url.split(":", 1)
             self.port = None
+        
+        
 
     def __repr__(self):
-        return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')"
+        fragment_part = "" if self.fragment == None else ", fragment=" + self.fragment
+        #return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')"
+        return "URL(scheme={}, host={}, port={}, path={!r}{})".format(
+            self.scheme, self.host, self.port, self.path, fragment_part)
 
     def __str__(self):
         port_part = ":" + str(self.port)
@@ -516,7 +529,10 @@ class URL:
             port_part = ""
         if self.scheme == "http" and self.port == 80:
             port_part = ""
-        return self.scheme + "://" + self.host + port_part + self.path
+        if (self.fragment != None):
+            return self.scheme + "://" + self.host + port_part + self.path + "#" + self.fragment
+        else:
+            return self.scheme + "://" + self.host + port_part + self.path
 
     def format_headers(self, headers):
         """Format the given header dictionary into a string."""
@@ -916,9 +932,11 @@ class Tab:
 
     def click(self, x_pos, y_pos):
         x, y = x_pos, y_pos
-
+        #global counter 
+        #counter += 1
         y += self.scroll
-
+        #if counter > 3:
+        #    print('self.url: {}'.format(self.url))
         objs = [obj for obj in tree_to_list(self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
         if not objs: return
         elt = objs[-1].node
@@ -926,8 +944,11 @@ class Tab:
             if isinstance(elt, Text):
                 pass
             elif elt.tag == 'a' and 'href' in elt.attributes:
-                url = self.url.resolve(elt.attributes['href'])
-                return self.load(url)
+                if "#" == elt.attributes.get("href")[1:]:
+                    return self.scroll_to(elt.attributes.get("href")[1:])
+                else:
+                    url = self.url.resolve(elt.attributes['href'])
+                    return self.load(url)
             elt = elt.parent
 
     def scrolldown(self, delta):
@@ -966,12 +987,20 @@ class Tab:
             back = self.history.pop()
             self.load(back)
 
+    def scroll_to(self, fragment):
+        for obj in tree_to_list(self.document, []):
+            if(isinstance(obj.node, Element) and obj.node.attributes.get("id") == fragment):
+                self.scroll = obj.y
+
     def load(self, url, view_source: Optional[bool] = False):
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
+        global counter
+        counter += 1 
         body = url.request()
         self.url = url
         self.history.append(url)
+        
         if view_source:
             print(body)
         else:
@@ -999,6 +1028,8 @@ class Tab:
 
             style(self.nodes, sorted(rules, key=cascade_priority))
             self.document.layout()
+            if url.fragment:
+                self.scroll_to(url.fragment)
             self.display_list = []
             paint_tree(self.document, self.display_list)
             #self.draw()
