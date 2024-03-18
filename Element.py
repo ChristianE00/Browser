@@ -6,6 +6,7 @@ class Element:
         self.tag = tag
         self.children = []
         self.parent = parent
+        self.is_focused = False
 
 
     def __repr__(self):

@@ -28,6 +28,7 @@ class DrawRect:
     def execute(self, scroll, canvas):
         canvas.create_rectangle(self.rect.left, self.rect.top - scroll, self.rect.right, self.rect.bottom - scroll, width=0, fill=self.color)
 
+
 class Rect:
     def __init__(self, left, top, right, bottom):
         self.left = left
@@ -41,3 +42,17 @@ class Rect:
     def containsPoint(self, x, y):
         ''' Test whether a point is contained in a Rext '''
         return x >= self.left and x < self.right and y >= self.top and y < self.bottom
+
+
+class DrawLine:
+    # def __init__(self, rect, color, thickness):
+    def __init__(self, x1, y1, x2, y2, color, thickness):
+        self.rect = Rect(x1, y1, x2, y2)
+        self.color = color
+        self.thickness = thickness
+
+    def execute(self, scroll, canvas):
+        canvas.create_line(
+            self.rect.left, self.rect.top - scroll,
+            self.rect.right, self.rect.bottom - scroll,
+            fill=self.color, width=self.thickness)

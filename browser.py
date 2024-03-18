@@ -6,14 +6,15 @@ import time
 import tkinter
 import tkinter.font
 import unicodedata
+import urllib
 from typing import Dict, Optional
 from CSSParser import CSSParser
 from classselector import ClassSelector
 from Text import Text
 from Element import Element
 from HTMLParser import HTMLParser
-from layout import LineLayout, TextLayout
-from draw import DrawRect, DrawText, Rect
+from layout import LineLayout, TextLayout, InputLayout, INPUT_WIDTH_PX
+from draw import DrawRect, DrawText, Rect, DrawLine
 from helpers import get_font, FONTS, WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
@@ -57,7 +58,8 @@ def set_parameters(**params):
 
 
 def paint_tree(layout_object, display_list):
-    display_list.extend(layout_object.paint())
+    if layout_object.should_paint():
+        display_list.extend(layout_object.paint())
     for child in layout_object.children:
         paint_tree(child, display_list)
 
@@ -121,6 +123,9 @@ class DocumentLayout:
     def paint(self):
         return []
 
+    def should_paint(self):
+        return True
+
     def layout(self):
         self.width = WIDTH - 2*HSTEP
         self.x, self.y = HSTEP, VSTEP
@@ -158,14 +163,17 @@ class BlockLayout:
             rect = DrawRect(self.self_rect(), bgcolor)
             cmds.append(rect)
         return cmds  # NOTE: might be a bug
-
+    
+    def should_paint(self):
+        return isinstance(self.node, Text) or \
+            (self.node.tag != "input" and self.node.tag !=  "button")
 
     def layout_mode(self):
         if isinstance(self.node, Text):
             return "inline"
         elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
             return "block"
-        elif self.node.children:
+        elif self.node.children or self.node.tag == 'input':
             return "inline"
         else:
             return "block"
@@ -188,7 +196,6 @@ class BlockLayout:
         else:
             self.x = self.parent.x
             self.width = self.parent.width
-        # NOTE: Thinks <body>
 
         mode = self.layout_mode()
         if mode == "block":
@@ -210,10 +217,13 @@ class BlockLayout:
             for word in node.text.split():
                 self.word(node, word)
         else:
-            if node.tag == "br":
+            if node.tag == 'br':
                 self.new_line()
-            for child in node.children:
-                self.recurse(child)
+            elif node.tag == 'input' or node.tag == 'button':
+                self.input(node)
+            else:
+                for child in node.children:
+                    self.recurse(child)
 
     def token(self, tok):
         if isinstance(tok, Text):
@@ -271,6 +281,24 @@ class BlockLayout:
         previous_word = line.children[-1] if line.children else None
         text = TextLayout(node, word, line, previous_word)
         line.children.append(text)
+        self.cursor_x += w + font.measure(" ")
+
+    def input(self, node):
+        w = INPUT_WIDTH_PX
+        if self.cursor_x + w > self.width:
+            self.new_line()
+        line = self.children[-1]
+        previous_word = line.children[-1] if line.children else None
+        input = InputLayout(node, line, previous_word)
+        line.children.append(input)
+
+        family = node.style["font-family"]
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        if style == "normal": style = "roman"
+        size = int(float(node.style["font-size"][:-2]) * .75)
+        font = get_font(size, weight, style, family)
+
         self.cursor_x += w + font.measure(" ")
 
 
@@ -353,14 +381,20 @@ class Browser:
             return
         if not (0x20 <= ord(e.char) < 0x7f):
             return
-        self.chrome.keypress(e.char)
-        self.draw()
+        if self.chrome.keypress(e.char):
+            self.draw()
+        elif self.focus == 'content':
+            self.active_tab.keypress(e.char)
+            self.draw()
 
     def handle_click(self, e):
         """ Forward click to the active tab """
         if e.y < self.chrome.bottom:
+            self.focus = None
             self.chrome.click(e.x, e.y)
         else:
+            self.focus = 'content'
+            self.chrome.blur()
             tab_y = e.y - self.chrome.bottom
             self.active_tab.click(e.x, tab_y)
         self.draw()
@@ -621,8 +655,12 @@ class URL:
             response_headers[header.casefold()] = value.strip()
         return response_headers
 
-    def request(self, browser, headers: Optional[Dict[str, str]] = None, visited_urls=None):
+    """
+    def request(self, browser, payload=None, headers: Optional[Dict[str, str]] =None, visited_urls=None):
         '''Handles getting the page source from the server or local file.'''
+        method = 'POST' if payload else 'GET'
+        body = "{} {} HTTP/1.0\r\n".format(method, self.path)
+
         if self.scheme == "file":
             return self.handle_local_file()
         elif self.scheme == "data":
@@ -682,6 +720,53 @@ class URL:
             for bookmark in browser.bookmarks:
                 http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
             return http_body
+    """
+    def request(self, browser, payload=None):
+        s = socket.socket(
+            family=socket.AF_INET,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+        s.connect((self.host, self.port))
+    
+        if self.scheme == "https":
+            ctx = ssl.create_default_context()
+            s = ctx.wrap_socket(s, server_hostname=self.host)
+        elif self.scheme == "data":
+            return self.handle_data_scheme() 
+        elif self.scheme == "about":
+            http_body = "<!doctype html>"
+            for bookmark in browser.bookmarks:
+                http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
+            return http_body
+
+        method = "POST" if payload else "GET"
+        
+        body = "{} {} HTTP/1.0\r\n".format(method, self.path)
+        if payload:
+            length = len(payload.encode("utf8"))
+            body += "Content-Length: {}\r\n".format(length)
+        body += "Host: {}\r\n".format(self.host)
+        body += "\r\n" + (payload if payload else "")
+        s.send(body.encode("utf8"))
+        response = s.makefile("r", encoding="utf8", newline="\r\n")
+    
+        statusline = response.readline()
+        version, status, explanation = statusline.split(" ", 2)
+    
+        response_headers = {}
+        while True:
+            line = response.readline()
+            if line == "\r\n": break
+            header, value = line.split(":", 1)
+            response_headers[header.casefold()] = value.strip()
+    
+        assert "transfer-encoding" not in response_headers
+        assert "content-encoding" not in response_headers
+    
+        body = response.read()
+        s.close()
+        return body
         
 
 class DrawOutline:
@@ -698,18 +783,7 @@ class DrawOutline:
             outline=self.color)
 
 
-class DrawLine:
-    # def __init__(self, rect, color, thickness):
-    def __init__(self, x1, y1, x2, y2, color, thickness):
-        self.rect = Rect(x1, y1, x2, y2)
-        self.color = color
-        self.thickness = thickness
 
-    def execute(self, scroll, canvas):
-        canvas.create_line(
-            self.rect.left, self.rect.top - scroll,
-            self.rect.right, self.rect.bottom - scroll,
-            fill=self.color, width=self.thickness)
 
 
 class Chrome:
@@ -787,6 +861,8 @@ class Chrome:
     def keypress(self, char):
         if self.focus == "address bar":
             self.address_bar += char
+            return True
+        return False
 
     def enter(self):
         if self.focus == "address bar":
@@ -870,6 +946,10 @@ class Chrome:
         tab_width = self.font.measure("Tab X") + 2*self.padding
         return Rect(tabs_start + tab_width * i, self.tabbar_top, tabs_start + tab_width * (i + 1), self.tabbar_bottom)
 
+    def blur(self):
+        self.focus = None
+
+
 
 class Tab:
     def __init__(self, tab_height, browser):
@@ -877,6 +957,10 @@ class Tab:
         self.tab_height = tab_height
         self.history = []
         self.browser = browser
+        self.focus = None
+
+    def __repr__(self):
+        return "Tab(history={})".format(self.history)
 
     def middleClick(self, x_pos, y_pos, browser):
         x, y = x_pos, y_pos
@@ -910,12 +994,30 @@ class Tab:
         y += self.scroll
         objs = [obj for obj in tree_to_list(
             self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
+
         if not objs:
             return
         elt = objs[-1].node
+
         while elt:
             if isinstance(elt, Text):
                 pass
+            
+            elif elt.tag == 'button':
+                # Find the form that it's in by walking up the tree
+                while elt:
+                    if elt.tag == 'form' and 'action' in elt.attributes:
+                        return self.submit_form(elt)
+                    elt = elt.parent
+
+            elif elt.tag == 'input':
+                elt.attributes['value'] = ''
+                if self.focus:
+                    self.focus.is_focused = False
+                self.focus = elt
+                elt.is_focused = True
+                return self.render()
+
             elif elt.tag == 'a' and 'href' in elt.attributes:
                 if elt.attributes.get("href")[1:] == '#':
                     return self.scroll_to(elt.attributes.get("href")[1:])
@@ -964,10 +1066,10 @@ class Tab:
             if (isinstance(obj.node, Element) and obj.node.attributes.get("id") == fragment):
                 self.scroll = obj.y
 
-    def load(self, url, view_source: Optional[bool] = False):
+    def load(self, url, payload=None, view_source: Optional[bool]=False):
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
-        body = url.request(self.browser)
+        body = url.request(self.browser, payload)
         self.url = url
         self.history.append(url)
 
@@ -975,6 +1077,7 @@ class Tab:
             print(body)
         else:
             DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
+            self.rules = DEFAULT_STYLE_SHEET.copy()
             self.nodes = HTMLParser(body).parse()
 
             # Gather all the relative URL for each linked style sheet
@@ -994,18 +1097,44 @@ class Tab:
                 # ignore stylesheets that fail to download
                 except Exception:
                     continue
-                rules.extend(CSSParser(body).parse())
+                self.rules.extend(CSSParser(body).parse())
 
-            style(self.nodes, sorted(rules, key=cascade_priority))
+            style(self.nodes, sorted(self.rules, key=cascade_priority))
             self.document.layout()
             if url.fragment:
                 self.scroll_to(url.fragment)
             self.display_list = []
             paint_tree(self.document, self.display_list)
-            # self.draw()
+        self.render()
 
-    def __repr__(self):
-        return "Tab(history={})".format(self.history)
+    def render(self):
+        style(self.nodes, sorted(self.rules, key=cascade_priority))
+        self.document = DocumentLayout(self.nodes)
+        self.document.layout()
+        self.display_list = []
+        paint_tree(self.document, self.display_list)
+
+    def keypress(self, char):
+        if self.focus:
+            self.focus.attributes["value"] += char
+            self.render()
+
+    def submit_form(self, elt):
+        """In charge of finding all input elements, encoding them, and sending the post request """
+        inputs = [node for node in tree_to_list(elt, [])
+                  if isinstance(node, Element)
+                  and node.tag == "input"
+                  and "name" in node.attributes]
+        body = ''
+        for input in inputs:
+            name = input.attributes['name']
+            value = input.attributes.get('value', '')
+            name = urllib.parse.quote(name)
+            value = urllib.parse.quote(value)
+            body += '&' + name + '=' + value
+        body = body[1:]
+        url = self.url.resolve(elt.attributes['action'])
+        self.load(url, body)
 
 
 if __name__ == "__main__":
