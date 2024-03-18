@@ -45,6 +45,9 @@ class Rect:
         self.right = right
         self.bottom = bottom
 
+    def __repr__(self):
+        return "Rect({}, {}, {}, {})".format(self.left, self.top, self.right, self.bottom)
+
     def containsPoint(self, x, y):
         ''' Test whether a point is contained in a Rext '''
         return x >= self.left and x < self.right and y >= self.top and y < self.bottom

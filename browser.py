@@ -37,12 +37,12 @@ INHERITED_PROPERTIES = {
 }
 
 
-
 def print_tree(node, indent=0):
     """Print the tree structure of the HTML."""
     print(" " * indent, node)
     for child in node.children:
         print_tree(child, indent + 2)
+
 
 def set_parameters(**params):
     """Modify the WIDTH, HEIGHT, HSTEP, VSTEP, SCROLL_STEP parameters"""
@@ -80,7 +80,8 @@ def style(node, rules):
             node.style[property] = value
 
     for selector, body in rules:
-        if not selector.matches(node): continue
+        if not selector.matches(node):
+            continue
         for property, value in body.items():
             node.style[property] = value
 
@@ -129,7 +130,7 @@ class DocumentLayout:
         child = BlockLayout(self.node, self, None)
         self.children.append(child)
         child.layout()
-        #self.display_list = child.display_list
+        # self.display_list = child.display_list
         self.height = child.height
 
 
@@ -151,21 +152,21 @@ class BlockLayout:
 
     def self_rect(self):
         return Rect(self.x, self.y,
-            self.x + self.width, self.y + self.height)
+                    self.x + self.width, self.y + self.height)
 
     def paint(self):
         cmds = []
         bgcolor = self.node.style.get("background-color", "transparent")
         if bgcolor != "transparent":
-            #x2, y2, = self.x + self.width, self.y + self.height
-            #rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+            # x2, y2, = self.x + self.width, self.y + self.height
+            # rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
             rect = DrawRect(self.self_rect(), bgcolor)
             cmds.append(rect)
-        return cmds # NOTE: might be a bug
+        return cmds  # NOTE: might be a bug
 
         if isinstance(self.node, Element) and self.node.tag == "li":
             rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2),
-                self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
+                            self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
             cmds.append(rect)
 
         '''
@@ -177,7 +178,7 @@ class BlockLayout:
         '''
 
         if isinstance(self.node, Element) and self.node.tag == "nav" \
-        and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
+                and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
             x2, y2 = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
             cmds.append(rect)
@@ -255,7 +256,8 @@ class BlockLayout:
         line_length = (self.line[-1][0] + last_word_width) - self.line[0][0]
         centered_x = (WIDTH - line_length) / 2
         for rel_x, word, font, s, color in self.line:
-            x = centered_x + (rel_x + self.x) - self.line[0][0] if center else rel_x + self.x
+            x = centered_x + (rel_x + self.x) - \
+                self.line[0][0] if center else rel_x + self.x
             y = self.y + baseline - max_ascent if s else self.y + baseline - \
                 font.metrics("ascent")
             self.display_list.append((x, y, word, font, color))
@@ -280,7 +282,8 @@ class BlockLayout:
         weight = node.style["font-weight"]
         style = node.style["font-style"]
         family = node.style["font-family"]
-        if style == "normal": style = "roman"
+        if style == "normal":
+            style = "roman"
         size = int(float(node.style["font-size"][:-2]) * .75)
 
         font = get_font(size, weight, style, family)
@@ -319,7 +322,6 @@ class Browser:
             bg="white"
         )
 
-
         # self.entry = tkinter.Entry(self.window)
         # self.entry.bind("<Return>", self.on_submit)
         # self.text_showing = False
@@ -346,26 +348,26 @@ class Browser:
         self.url = None
         self.tabs = []
         self.active_tab = None
+        self.bookmarks = []
         self.chrome = Chrome(self)
 
     def handle_middle_click(self, e):
         """ Forward click to the active tab """
-        #click within the web page
+        # click within the web page
         if e.y < self.chrome.bottom:
             pass
-        #click within the tab bar
+        # click within the tab bar
         else:
             tab_y = e.y - self.chrome.bottom
             self.active_tab.middleClick(e.x, tab_y, self)
         self.draw()
-
 
     def handle_backspace(self, e):
         self.chrome.backspace()
         self.draw()
 
     def new_tab(self, url):
-        new_tab = Tab(HEIGHT - self.chrome.bottom)
+        new_tab = Tab(HEIGHT - self.chrome.bottom, self)
         new_tab.load(url)
         self.active_tab = new_tab
         self.tabs.append(new_tab)
@@ -376,8 +378,10 @@ class Browser:
         self.draw()
 
     def handle_key(self, e):
-        if len(e.char) == 0: return
-        if not (0x20 <= ord(e.char) < 0x7f): return
+        if len(e.char) == 0:
+            return
+        if not (0x20 <= ord(e.char) < 0x7f):
+            return
         self.chrome.keypress(e.char)
         self.draw()
 
@@ -395,8 +399,6 @@ class Browser:
         delta = e.delta
         self.active_tab.scrolldown(delta)
         self.draw()
-
-    
 
     def command_mode(self, e):
         if not self.text_showing:
@@ -427,9 +429,6 @@ class Browser:
         """Resize the canvas and redraw the display list."""
         global WIDTH, HEIGHT
         WIDTH, HEIGHT = e.width, e.height
-
-
-
 
     def draw(self):
         self.canvas.delete("all")
@@ -467,13 +466,12 @@ class Browser:
         '''
 
 
-
-
 class URL:
     """This class is used to parse the url and request the data from the server"""
 
     cache = {}
 
+    '''
     def __init__(self, url):
         global counter
         counter += 1
@@ -508,18 +506,49 @@ class URL:
             elif self.scheme == "https":
                 self.port = 443
             self.path = "/" + self.path
-            
+
         # Handle inline HTML
         elif "data:" in url:
             self.path = url
             self.scheme, url = url.split(":", 1)
             self.port = None
-        
-        
+    '''
+
+    def __init__(self, url):
+        try:
+            self.visited_urls = set()
+            self.fragment = None
+            self.scheme, url = url.split("://", 1)
+            assert self.scheme in ["http", "https", "about"]
+
+            if "/" not in url:
+                url = url + "/"
+            self.host, url = url.split("/", 1)
+            self.path = "/" + url
+
+            if "#" in self.path:
+                self.path, self.fragment = self.path.split("#", 1)
+            if self.scheme == "http":
+                self.port = 80
+            elif self.scheme == "https":
+                self.port = 443
+            elif self.scheme == "about":
+                self.port = "None"
+                self.host = "None"
+                self.path = "bookmarks"
+
+            if ":" in self.host:
+                self.host, port = self.host.split(":", 1)
+                self.port = int(port)
+
+        except:
+            print("Error.")
+            print("  URL: " + url)
+            self.__init__("https://browser.engineering")
 
     def __repr__(self):
         fragment_part = "" if self.fragment == None else ", fragment=" + self.fragment
-        #return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')"
+        # return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')"
         return "URL(scheme={}, host={}, port={}, path={!r}{})".format(
             self.scheme, self.host, self.port, self.path, fragment_part)
 
@@ -562,7 +591,8 @@ class URL:
         return base_headers
 
     def resolve(self, url):
-        if "://" in url: return URL(url)
+        if "://" in url:
+            return URL(url)
         if not url.startswith("/"):
             dir, _ = self.path.rsplit("/", 1)
             while url.startswith("../"):
@@ -573,7 +603,7 @@ class URL:
         if url.startswith("//"):
             return URL(self.scheme + ":" + url)
         else:
-            return URL(self.scheme + "://" + self.host + \
+            return URL(self.scheme + "://" + self.host +
                        ":" + str(self.port) + url)
 
     def cache_response(self, url, headers, body):
@@ -673,8 +703,9 @@ class URL:
             response_headers[header.casefold()] = value.strip()
         return response_headers
 
+    """
     def request(self, headers: Optional[Dict[str, str]] = None, visited_urls=None):
-        """Handles getting the page source from the server or local file."""
+        '''Handles getting the page source from the server or local file.'''
         if self.scheme == "file":
             return self.handle_local_file()
         elif self.scheme == "data":
@@ -729,8 +760,48 @@ class URL:
             body = response.read()
             s.close()
             return body
+            """
 
+    def request(self, browser):
+        s = socket.socket(
+            family=socket.AF_INET,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+        s.connect((self.host, self.port))
 
+        if self.scheme == "https":
+            ctx = ssl.create_default_context()
+            s = ctx.wrap_socket(s, server_hostname=self.host)
+        elif self.scheme == "about":
+            http_body = "<!doctype html>"
+            for bookmark in browser.bookmarks:
+                http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
+            return http_body
+
+        s.send(("GET {} HTTP/1.0\r\n".format(self.path) +
+                "Host: {}\r\n\r\n".format(self.host))
+               .encode("utf8"))
+        response = s.makefile("r", encoding="utf8", newline="\r\n")
+
+        statusline = response.readline()
+        version, status, explanation = statusline.split(" ", 2)
+
+        response_headers = {}
+        while True:
+            line = response.readline()
+            if line == "\r\n":
+                break
+            header, value = line.split(":", 1)
+            response_headers[header.casefold()] = value.strip()
+
+        assert "transfer-encoding" not in response_headers
+        assert "content-encoding" not in response_headers
+
+        body = response.read()
+        s.close()
+
+        return body
 
 
 class DrawOutline:
@@ -745,24 +816,27 @@ class DrawOutline:
             self.rect.right, self.rect.bottom - scroll,
             width=self.thickness,
             outline=self.color)
+
+
 class DrawLine:
-#    def __init__(self, rect, color, thickness):
+    #    def __init__(self, rect, color, thickness):
     def __init__(self, x1, y1, x2, y2, color, thickness):
-        #self.rect = rect
+        # self.rect = rect
         self.rect = Rect(x1, y1, x2, y2)
         self.color = color
         self.thickness = thickness
-    
+
     def execute(self, scroll, canvas):
         canvas.create_line(
             self.rect.left, self.rect.top - scroll,
             self.rect.right, self.rect.bottom - scroll,
             fill=self.color, width=self.thickness)
 
+
 class Chrome:
     def __init__(self, browser):
         self.browser = browser
-        self.font = get_font(20, 'normal', 'roman', 'Courier' )
+        self.font = get_font(20, 'normal', 'roman', 'Courier')
         self.font_height = self.font.metrics('linespace')
         self.padding = 5
         self.tabbar_top = 0
@@ -784,19 +858,34 @@ class Chrome:
             self.urlbar_top + self.padding,
             self.padding + back_width,
             self.urlbar_bottom - self.padding)
-
+        '''
         self.address_rect = Rect(
             self.back_rect.top + self.padding,
             self.urlbar_top + self.padding,
             WIDTH - self.padding,
             self.urlbar_bottom - self.padding)
-        
+        '''
+
+        self.address_rect = Rect(
+            self.back_rect.top + self.padding,
+            self.urlbar_top + self.padding,
+            WIDTH - self.padding * 2 - 20,
+            self.urlbar_bottom - self.padding,
+        )
+
+        # Make a new rectangle for the bookmarks
+        self.bookmarks_rect = Rect(
+            self.address_rect.right + self.padding,
+            self.urlbar_top + self.padding,
+            WIDTH - self.padding,
+            self.urlbar_bottom - self.padding,
+        )
         self.focus = None
         self.address_bar = ""
-        
+
     def backspace(self):
         self.focus == "address bar"
-        self.address_bar = self.address_bar[:-1] # remove last character
+        self.address_bar = self.address_bar[:-1]  # remove last character
 
     def click(self, x, y):
         self.focus = None
@@ -810,6 +899,12 @@ class Chrome:
         elif self.address_rect.containsPoint(x, y):
             self.focus = "address bar"
             self.address_bar = ""
+
+        elif self.bookmarks_rect.containsPoint(x, y):
+            if str(self.browser.active_tab.url) in self.browser.bookmarks:
+                self.browser.bookmarks.remove(str(self.browser.active_tab.url))
+            else:
+                self.browser.bookmarks.append(str(self.browser.active_tab.url))
 
         else:
             for i, tab in enumerate(self.browser.tabs):
@@ -826,7 +921,6 @@ class Chrome:
             self.browser.active_tab.load(URL(self.address_bar))
             self.focus = None
 
-
     def paint(self):
         cmds = []
         # Draw white rectangle behind chrome to ensure that Chrome is always on top of tab
@@ -838,7 +932,8 @@ class Chrome:
             self.bottom, "black", 1))
 
         cmds.append(DrawOutline(self.newtab_rect, "black", 1))
-        cmds.append(DrawText(self.newtab_rect.left + self.padding, self.newtab_rect.top, "+", self.font, "black"))
+        cmds.append(DrawText(self.newtab_rect.left + self.padding,
+                    self.newtab_rect.top, "+", self.font, "black"))
         for i, tab in enumerate(self.browser.tabs):
             bounds = self.tab_rect(i)
             cmds.append(DrawLine(
@@ -848,7 +943,7 @@ class Chrome:
                 bounds.right, 0, bounds.right, bounds.bottom,
                 "black", 1))
             cmds.append(DrawText(
-                bounds.left + self.padding, bounds.top + self.padding , "tab {}".format(i), self.font, "black"))
+                bounds.left + self.padding, bounds.top + self.padding, "tab {}".format(i), self.font, "black"))
 
             if tab == self.browser.active_tab:
                 cmds.append(DrawLine(
@@ -891,6 +986,11 @@ class Chrome:
                 self.address_rect.top,
                 url, self.font, "black"))
 
+        if str(self.browser.active_tab.url) in self.browser.bookmarks:
+            cmds.append(DrawRect(self.bookmarks_rect, "yellow"))
+
+        cmds.append(DrawOutline(self.bookmarks_rect, "black", 1))
+
         return cmds
 
     def tab_rect(self, i):
@@ -898,19 +998,23 @@ class Chrome:
         tab_width = self.font.measure("Tab X") + 2*self.padding
         return Rect(tabs_start + tab_width * i, self.tabbar_top, tabs_start + tab_width * (i + 1), self.tabbar_bottom)
 
+
 class Tab:
-    def __init__(self, tab_height):
+    def __init__(self, tab_height, browser):
         self.scroll = 0
         self.tab_height = tab_height
         self.history = []
+        self.browser = browser
 
     def middleClick(self, x_pos, y_pos, browser):
-        #print('entered middleClick')
+        # print('entered middleClick')
         x, y = x_pos, y_pos
         y += self.scroll
 
-        objs = [obj for obj in tree_to_list(self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
-        if not objs: return
+        objs = [obj for obj in tree_to_list(
+            self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
+        if not objs:
+            return
         elt = objs[-1].node
         while elt:
             if isinstance(elt, Text):
@@ -932,13 +1036,15 @@ class Tab:
 
     def click(self, x_pos, y_pos):
         x, y = x_pos, y_pos
-        #global counter 
-        #counter += 1
+        # global counter
+        # counter += 1
         y += self.scroll
-        #if counter > 3:
+        # if counter > 3:
         #    print('self.url: {}'.format(self.url))
-        objs = [obj for obj in tree_to_list(self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
-        if not objs: return
+        objs = [obj for obj in tree_to_list(
+            self.document, []) if obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height]
+        if not objs:
+            return
         elt = objs[-1].node
         while elt:
             if isinstance(elt, Text):
@@ -975,11 +1081,11 @@ class Tab:
         if delta > 0:
             if self.scroll > 0:
                 self.scroll -= SCROLL_STEP
-                #self.draw()
+                # self.draw()
         else:
             max_y = max(self.document.height + 2 * VSTEP - self.tab_height, 0)
             self.scroll = min(self.scroll + SCROLL_STEP, max_y)
-            #self.draw()
+            # self.draw()
 
     def go_back(self):
         if len(self.history) > 1:
@@ -989,18 +1095,18 @@ class Tab:
 
     def scroll_to(self, fragment):
         for obj in tree_to_list(self.document, []):
-            if(isinstance(obj.node, Element) and obj.node.attributes.get("id") == fragment):
+            if (isinstance(obj.node, Element) and obj.node.attributes.get("id") == fragment):
                 self.scroll = obj.y
 
     def load(self, url, view_source: Optional[bool] = False):
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
         global counter
-        counter += 1 
-        body = url.request()
+        counter += 1
+        body = url.request(self.browser)
         self.url = url
         self.history.append(url)
-        
+
         if view_source:
             print(body)
         else:
@@ -1020,7 +1126,7 @@ class Tab:
             # Convert relative URLs to full URLS:
             for link in links:
                 try:
-                    body = url.resolve(link).request()
+                    body = url.resolve(link).request(self.browser)
                 # ignore stylesheets that fail to download
                 except Exception:
                     continue
@@ -1032,9 +1138,11 @@ class Tab:
                 self.scroll_to(url.fragment)
             self.display_list = []
             paint_tree(self.document, self.display_list)
-            #self.draw()
+            # self.draw()
+
     def __repr__(self):
         return "Tab(history={})".format(self.history)
+
 
 if __name__ == "__main__":
     import sys
@@ -1043,6 +1151,6 @@ if __name__ == "__main__":
     nodes = HTMLParser(body).parse()
     print_tree(nodes)
     '''
-    #Browser().load(URL(sys.argv[1]))
+    # Browser().load(URL(sys.argv[1]))
     Browser().new_tab(URL(sys.argv[1]))
     tkinter.mainloop()
