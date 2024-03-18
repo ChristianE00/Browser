@@ -7,11 +7,7 @@ class DrawText:
         self.font = font
         self.bottom = y1 + font.metrics("linespace")
         self.color = color
-    '''
-    def __repr__(self):
-        return "DrawText(top={} left={} bottom={} text={} font={})" \
-            .format(self.top, self.left, self.bottom, self.text, self.font)
-    '''
+
     def __repr__(self):
         return "DrawText(text={})".format(self.text)
 
@@ -22,12 +18,6 @@ class DrawText:
 class DrawRect:
     #def __init__(self, x1, y1, x2, y2, color):
     def __init__(self, rect, color):
-        '''
-        self.top = y1
-        self.left = x1
-        self.bottom = y2
-        self.right = x2
-        '''
         self.rect = rect
         self.color = color
 
