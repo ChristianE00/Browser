@@ -155,24 +155,10 @@ class BlockLayout:
         cmds = []
         bgcolor = self.node.style.get("background-color", "transparent")
         if bgcolor != "transparent":
-            # x2, y2, = self.x + self.width, self.y + self.height
-            # rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
             rect = DrawRect(self.self_rect(), bgcolor)
             cmds.append(rect)
         return cmds  # NOTE: might be a bug
 
-        if isinstance(self.node, Element) and self.node.tag == "li":
-            rect = DrawRect(self.x - HSTEP - 2, self.y + (self.height_of_firstline / 2 - 2),
-                            self.x - HSTEP + 2, self.y + 4 + (self.height_of_firstline / 2 - 2), "black")
-            cmds.append(rect)
-
-        if isinstance(self.node, Element) and self.node.tag == "nav" \
-                and "class" in self.node.attributes and "links" in self.node.attributes["class"]:
-            x2, y2 = self.x + self.width, self.y + self.height
-            rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
-            cmds.append(rect)
-
-        return cmds
 
     def layout_mode(self):
         if isinstance(self.node, Text):
