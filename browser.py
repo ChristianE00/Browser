@@ -467,14 +467,12 @@ class URL:
                 self.host = url
                 url = ""
 
-
             if "/" in url:
                 self.host, url = url.split("/", 1)
             '''
 
             assert self.scheme in ["http", "https", "file", "about"]
 
-            
             if "#" in self.path:
                 self.path, self.fragment = self.path.split("#", 1)
             if "file" in self.scheme:

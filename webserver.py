@@ -1,12 +1,41 @@
 import socket 
+import urllib
 ENTRIES = [ 'Pavel was here' ]
 
+def add_entry(params):
+    if 'guest' in params:
+        ENTRIES.append(params['guest'])
+    return show_comments()
+
+def form_decode(body):
+    params = {}
+    for field in body.split('&'):
+        name, value = field.split('=', 1)
+        name = urllib.parse.unquote_plus(name)
+        value = urllib.parse.unquote_plus(value)
+        params[name] = value
+    return params
 
 def do_request(method, url, headers, body):
+    if method == 'GET' and url == '/':
+        return '200 OK', show_comments()
+    elif method == 'POST' and url == '/add':
+        params = form_decode(body)
+        return '200 OK', add_entry(params) 
+    else:
+        return '404 Not Found', not_found(url, method)
+
+def show_comments(method, url, headers, body):
     out = '<!doctype html>'
+    out += '<form action=add method=post>'
+    out += '<p><input name=guest></p>'
+    out += '<p><button>Sign the book!</button></p>'
+    out += '</form>'
     for entry in ENTRIES:
         out += '<p>' + entry + '</p>'
-    return '200 OK', out
+    
+    
+    return out
 
 
 def handle_connection(conx):
@@ -43,7 +72,14 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(('', 8000))
 s.listen()
 
-
-while True:
-    conx, addr = s.accept()
-    handle_connection(conx)
+s.settimeout(1)  # Set a timeout of 1 second
+try:
+    while True:
+        try:
+            conx, addr = s.accept()
+            handle_connection(conx)
+        except socket.timeout:
+            continue
+except KeyboardInterrupt:
+    print('\nShutting down the server...')
+    s.close()
