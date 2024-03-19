@@ -9,7 +9,10 @@ class DrawText:
         self.color = color
 
     def __repr__(self):
-        return "DrawText(text={})".format(self.text)
+        #return "DrawText(text={})".format(self.text)
+        #top=20.25 left=85 bottom=32.25 text=1 font=Font size=12 weight=normal slant=roman style=None
+        return "DrawText(top={} left={} bottom={} text={} font={})".format(
+            self.top, self.left, self.bottom, self.text, self.font)
 
     def execute(self, scroll, canvas):
         canvas.create_text(self.left, self.top - scroll, text=self.text, font=self.font, anchor="nw", fill=self.color)

@@ -7,6 +7,7 @@ import tkinter
 import tkinter.font
 import unicodedata
 import urllib
+import urllib.parse
 from typing import Dict, Optional
 from CSSParser import CSSParser
 from classselector import ClassSelector
@@ -719,7 +720,7 @@ class URL:
                 http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
             return http_body
     """
-    def request(self, browser, payload=None):
+    def request(self, payload=None):
         s = socket.socket(
             family=socket.AF_INET,
             type=socket.SOCK_STREAM,
@@ -732,11 +733,14 @@ class URL:
             s = ctx.wrap_socket(s, server_hostname=self.host)
         elif self.scheme == "data":
             return self.handle_data_scheme() 
+
+        '''
         elif self.scheme == "about":
             http_body = "<!doctype html>"
             for bookmark in browser.bookmarks:
                 http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
             return http_body
+        '''
 
         method = "POST" if payload else "GET"
         
@@ -1067,7 +1071,7 @@ class Tab:
     def load(self, url, payload=None, view_source: Optional[bool]=False):
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
-        body = url.request(self.browser, payload)
+        body = url.request(payload)
         self.url = url
         self.history.append(url)
 

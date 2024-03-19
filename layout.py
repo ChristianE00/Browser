@@ -109,9 +109,8 @@ class InputLayout:
         self.previous = previous
 
     def __repr__(self):
-        return ("TextLayout(x={}, y={}, width={}, height={}, " +
-            "word={})").format(
-            self.x, self.y, self.width, self.height, self.word)
+        return "InputLayout(x={}, y={}, width={}, height={}, tag={})".format(
+            self.x, self.y, self.width, self.height, self.node.tag)
     
     def should_paint(self):
         return True
@@ -127,9 +126,7 @@ class InputLayout:
             rect = DrawRect(self.self_rect(), bgcolor)
             cmds.append(rect)
 
-        if self.node.is_focused:
-            cx = self.x + self.font.measure(text)
-            cmds.append(DrawLine(cx, self.y, cx, self.y + self.height, 'black', 1)) 
+        
 
         if self.node.tag == 'input':
             text = self.node.attributes.get('value', '')
@@ -144,6 +141,10 @@ class InputLayout:
         color = self.node.style["color"]
         cmds.append(
             DrawText(self.x, self.y, text, self.font, color))
+
+        if self.node.is_focused:
+            cx = self.x + self.font.measure(text)
+            cmds.append(DrawLine(cx, self.y, cx, self.y + self.height, 'black', 1)) 
         return cmds
 
     def layout(self):
