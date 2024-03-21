@@ -345,6 +345,7 @@ class Browser:
         self.window.bind("<BackSpace>", self.handle_backspace)
         self.window.bind("<Button-2>", self.handle_middle_click)
 
+        self.focus = None
         self.url = None
         self.tabs = []
         self.active_tab = None
@@ -374,7 +375,10 @@ class Browser:
         self.draw()
 
     def handle_enter(self, e):
-        self.chrome.enter()
+        if self.focus == 'content':
+            self.active_tab.enter()
+        else:
+            self.chrome.enter()
         self.draw()
 
     def handle_key(self, e):
@@ -963,6 +967,16 @@ class Tab:
 
     def __repr__(self):
         return "Tab(history={})".format(self.history)
+
+    def enter(self):
+        if self.focus:
+            elt = self.focus.parent
+            while elt:
+                if elt.tag == 'form' and "action" in elt.attributes:
+                    return self.submit_form(elt)
+                else:
+                    elt = elt.parent
+
 
     def middleClick(self, x_pos, y_pos, browser):
         x, y = x_pos, y_pos
