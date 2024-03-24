@@ -14,11 +14,12 @@ from classselector import ClassSelector
 from Text import Text
 from Element import Element
 from HTMLParser import HTMLParser
-from layout import LineLayout, TextLayout, InputLayout, INPUT_WIDTH_PX
+from layout import LineLayout, TextLayout, InputLayout, DocumentLayout, INPUT_WIDTH_PX
 from draw import DrawRect, DrawText, Rect, DrawLine
 from helpers import get_font, FONTS, WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
+'''
 BLOCK_ELEMENTS = [
     "html", "body", "article", "section", "nav", "aside",
     "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
@@ -27,6 +28,7 @@ BLOCK_ELEMENTS = [
     "figcaption", "main", "div", "table", "form", "fieldset",
     "legend", "details", "summary"
 ]
+'''
 INHERITED_PROPERTIES = {
     "font-size": "16px",
     "font-style": "normal",
@@ -112,34 +114,12 @@ def tree_to_list(tree, list):
     return list
 
 
-class DocumentLayout:
-    def __init__(self, node):
-        self.node = node
-        self.parent = None
-        self.children = []
-        self.x, self.y, self.width, self.height = None, None, None, None
 
-    def __repr__(self):
-        return "DocumentLayout()"
-
-    def paint(self):
-        return []
-
-    def should_paint(self):
-        return True
-
-    def layout(self):
-        self.width = WIDTH - 2*HSTEP
-        self.x, self.y = HSTEP, VSTEP
-        child = BlockLayout(self.node, self, None)
-        self.children.append(child)
-        child.layout()
-        # self.display_list = child.display_list
-        self.height = child.height
 
 
 # NOTE: Doesn't seem to be creating all the child blocks
 #       Only 2 BlockLayouts are working <html>, <body>
+'''
 class BlockLayout:
 
     def __init__(self, node, parent, previous):
@@ -302,7 +282,7 @@ class BlockLayout:
         font = get_font(size, weight, style, family)
 
         self.cursor_x += w + font.measure(" ")
-
+'''
 
 class Tag:
     """A simple class to represent a tag token."""
