@@ -162,7 +162,6 @@ class InputLayout:
             if len(self.node.children) == 1 and isinstance(self.node.children[0], Text):
                 text = self.node.children[0].text
             else:
-                print("Ignoring HTML contents inside button")
                 text = ""
             return cmds
 
@@ -196,7 +195,7 @@ class InputLayout:
             self.x = self.parent.x
         '''
         if self.node.tag == 'button':
-            child = BlockLayout(self.node.children, self, None)
+            child = BlockLayout(self.node.children[0], self, None)
             self.children.append(child)
             child.layout()
             self.height = child.height
