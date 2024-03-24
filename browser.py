@@ -34,6 +34,7 @@ INHERITED_PROPERTIES = {
     "font-family": "Times",
     "color": "black",
 }
+counter = 0
 
 
 def print_tree(node, indent=0):
@@ -724,7 +725,12 @@ class URL:
                 http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
             return http_body
     """
-    def request(self, payload=None):
+    
+    def request(self, payload=None, method=None):
+        global counter
+        counter += 1
+        if method == None:
+            method = 'POST' if payload else 'GET'
         s = socket.socket(
             family=socket.AF_INET,
             type=socket.SOCK_STREAM,
@@ -745,10 +751,14 @@ class URL:
                 http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
             return http_body
         '''
-
-        method = "POST" if payload else "GET"
         
-        body = "{} {} HTTP/1.0\r\n".format(method, self.path)
+#        method = "POST" if payload else "GET"
+        query = ''
+        if method == 'GET' and payload:
+            query = '?' + payload
+            
+        
+        body = "{} {}{} HTTP/1.0\r\n".format(method, self.path, query)
         if payload:
             length = len(payload.encode("utf8"))
             body += "Content-Length: {}\r\n".format(length)
@@ -1028,6 +1038,14 @@ class Tab:
 
             elif elt.tag == 'input':
                 elt.attributes['value'] = ''
+
+                # --------------CHEKBOXES----------------
+                if elt.attributes.get('type', 'text') == 'checkbox':
+                    if 'checked' in elt.attributes:
+                        del elt.attributes['checked']
+                    else:
+                        elt.attributes['checked'] = ''
+
                 if self.focus:
                     self.focus.is_focused = False
                 self.focus = elt
@@ -1082,10 +1100,10 @@ class Tab:
             if (isinstance(obj.node, Element) and obj.node.attributes.get("id") == fragment):
                 self.scroll = obj.y
 
-    def load(self, url, payload=None, view_source: Optional[bool]=False):
+    def load(self, url, payload=None, method='GET', view_source: Optional[bool]=False):
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
-        body = url.request(payload)
+        body = url.request(payload, method=method)
         self.url = url
         self.history.append(url)
 
@@ -1145,12 +1163,20 @@ class Tab:
         for input in inputs:
             name = input.attributes['name']
             value = input.attributes.get('value', '')
+
+            #if name == 'check':
             name = urllib.parse.quote(name)
             value = urllib.parse.quote(value)
             body += '&' + name + '=' + value
+
+            #else: pass
+
         body = body[1:]
         url = self.url.resolve(elt.attributes['action'])
-        self.load(url, body)
+        method = elt.attributes.get('method')
+        if method == None:
+            method = 'GET'
+        self.load(url, body, method)
 
 
 if __name__ == "__main__":

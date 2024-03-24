@@ -1,5 +1,5 @@
 # import helpers as h
-from helpers import get_font, FONTS
+from helpers import get_font, FONTS, CHECKBOX_HEIGHT
 from draw import DrawText, DrawRect, DrawLine, Rect
 from Text import Text
 
@@ -107,6 +107,9 @@ class InputLayout:
         self.children = []
         self.parent = parent
         self.previous = previous
+        self.type = 'checkbox'
+        if self.type == 'checkbox':
+            self.width = CHECKBOX_HEIGHT 
 
     def __repr__(self):
         return "InputLayout(x={}, y={}, width={}, height={}, tag={})".format(
@@ -119,6 +122,9 @@ class InputLayout:
         return Rect(self.x, self.y,
             self.x + self.width, self.y + self.height)
 
+    def inset(self, offset):
+        return Rect(self.left - offset, self.right + offset, self.top + offset, self.bottom - offset)
+
     def paint(self):
         cmds = []
         bgcolor = self.node.style.get('background-color', 'transparent')
@@ -127,6 +133,14 @@ class InputLayout:
             cmds.append(rect)
 
         
+        if self.type == 'checkbox':
+            '''
+            rect = DrawRect(self.self_rect(), 'black')
+            cmds.append(rect)
+            '''
+            if 'checked' in self.node.attributes:
+                rect = DrawRect(self.self_rect().inset(3), 'red')
+                cmds.append(rect)
 
         if self.node.tag == 'input':
             text = self.node.attributes.get('value', '')

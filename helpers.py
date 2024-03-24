@@ -1,6 +1,7 @@
 import tkinter.font
 FONTS = {}
 WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP = 800, 600, 13, 18, 0, 100
+CHECKBOX_HEIGHT = 16
 
 def get_font(size, weight, slant, family):
     key = (size, weight, slant, family)
