@@ -55,6 +55,11 @@ class LineLayout:
         # calculate the line's height
         self.height = 1.25 * (max_ascent + max_descent)
 
+        for word in self.children:
+            word.post_y_layout()
+
+    
+
 class TextLayout:
 
     def __init__(self, node, word, parent, previous):
@@ -99,6 +104,8 @@ class TextLayout:
             self.x = self.parent.x
         self.height = self.font.metrics("linespace")
 
+    def post_y_layout(self):
+        return
 
 INPUT_WIDTH_PX = 200
 class InputLayout:
@@ -108,6 +115,11 @@ class InputLayout:
         self.children = []
         self.parent = parent
         self.previous = previous
+        self.x = None
+        self.y = None
+        self.width = None
+        self.height = None
+        self.font = None
         self.type = 'checkbox'
         if self.type == 'checkbox':
             self.width = CHECKBOX_HEIGHT 
@@ -152,6 +164,7 @@ class InputLayout:
             else:
                 print("Ignoring HTML contents inside button")
                 text = ""
+            return cmds
 
         color = self.node.style["color"]
         cmds.append(
@@ -183,7 +196,7 @@ class InputLayout:
             self.x = self.parent.x
         '''
         if self.node.tag == 'button':
-            child = BlockLayout(self.node, self, None)
+            child = BlockLayout(self.node.children, self, None)
             self.children.append(child)
             child.layout()
             self.height = child.height
@@ -191,6 +204,11 @@ class InputLayout:
         self.height = self.font.metrics("linespace")
 
 
+    def post_y_layout(self):
+        if self.node.tag == 'button':
+            child = BlockLayout(self.node.children[0], self, None)
+            self.children.append(child)
+            child.layout()
 
 
 
