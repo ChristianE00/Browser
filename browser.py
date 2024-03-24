@@ -15,7 +15,7 @@ from Text import Text
 from Element import Element
 from HTMLParser import HTMLParser
 from layout import LineLayout, TextLayout, InputLayout, DocumentLayout, INPUT_WIDTH_PX
-from draw import DrawRect, DrawText, Rect, DrawLine
+from draw import DrawRect, DrawText, Rect, DrawLine, DrawOutline
 from helpers import get_font, FONTS, WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
@@ -765,18 +765,7 @@ class URL:
         return body
         
 
-class DrawOutline:
-    def __init__(self, rect, color, thickness):
-        self.rect = rect
-        self.color = color
-        self.thickness = thickness
 
-    def execute(self, scroll, canvas):
-        canvas.create_rectangle(
-            self.rect.left, self.rect.top - scroll,
-            self.rect.right, self.rect.bottom - scroll,
-            width=self.thickness,
-            outline=self.color)
 
 
 
@@ -1144,12 +1133,12 @@ class Tab:
             name = input.attributes['name']
             value = input.attributes.get('value', '')
 
-            #if name == 'check':
+#            if name == 'check':
             name = urllib.parse.quote(name)
             value = urllib.parse.quote(value)
             body += '&' + name + '=' + value
 
-            #else: pass
+#            else: pass
 
         body = body[1:]
         url = self.url.resolve(elt.attributes['action'])

@@ -1,6 +1,6 @@
 # import helpers as h
 from helpers import get_font, FONTS, CHECKBOX_HEIGHT, WIDTH, BLOCK_ELEMENTS, HSTEP, VSTEP
-from draw import DrawText, DrawRect, DrawLine, Rect
+from draw import DrawText, DrawRect, DrawLine, Rect, DrawOutline
 from Text import Text
 from Element import Element
 
@@ -55,6 +55,7 @@ class LineLayout:
         # calculate the line's height
         self.height = 1.25 * (max_ascent + max_descent)
 
+        # Second layout calls
         for word in self.children:
             word.post_y_layout()
 
@@ -71,6 +72,10 @@ class TextLayout:
         self.font  = None
         self.width = None
         self.x     = None
+        self.y = None
+        self.width = None
+        self.height = None
+        self.font = None
 
     def __repr__(self):
         return ("TextLayout(x={}, y={}, width={}, height={}, " +
@@ -147,10 +152,8 @@ class InputLayout:
 
         
         if self.type == 'checkbox':
-            '''
-            rect = DrawRect(self.self_rect(), 'black')
-            cmds.append(rect)
-            '''
+           # rect = DrawOutline(self.self_rect(), 'black', thickness=1)
+          #  cmds.append(rect)
             if 'checked' in self.node.attributes:
                 rect = DrawRect(self.self_rect().inset(3), 'red')
                 cmds.append(rect)
@@ -193,13 +196,6 @@ class InputLayout:
             self.x = self.previous.x + space + self.previous.width
         else:
             self.x = self.parent.x
-        '''
-        if self.node.tag == 'button':
-            child = BlockLayout(self.node.children[0], self, None)
-            self.children.append(child)
-            child.layout()
-            self.height = child.height
-        '''
         self.height = self.font.metrics("linespace")
 
 
