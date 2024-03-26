@@ -742,9 +742,50 @@ class JSContext:
         self.interp.export_function("getAttribute",
             self.getAttribute)
         self.interp.export_function("innerHTML_set", self.innerHTML_set)
-        self.interp.evaljs(RUNTIME_JS)
-#        self.tab.render()
 
+        self.interp.export_function("createElement", self.createElement)
+        self.interp.export_function("appendChild", self.appendChild)
+        self.interp.export_function("insertBefore", self.insertBefore)
+
+        self.interp.export_function("getChildren", self.getChildren)
+
+        self.interp.evaljs(RUNTIME_JS)
+
+    def getChildren(self, handle):
+        elt = self.handle_to_node[handle]
+        elements = []
+        for child in elt.children:
+            if isinstance(child, Element):
+                elements.append(self.get_handle(child))
+
+        return elements
+
+
+    def createElement(self, tagName):
+        elt = Element(tagName, {}, None)
+        if elt:
+            print('!dbg [PY createElement] is NOT null')
+        else:
+            print('!dbg [PY createElement] is null')
+        return self.get_handle(elt)
+
+    def appendChild(self, parent_handle, child_handle):
+        print('!dbgentering appendChild----')
+        parent = self.handle_to_node[parent_handle]
+        child = self.handle_to_node[child_handle]
+        child.parent = parent
+        parent.children.append(child)
+        self.tab.render()
+
+    def insertBefore(self, parent_handle, child_handle, sibling_handle=None):
+        print("!dbg ENTERED insertBefore")
+        parent = self.handle_to_node[parent_handle]
+        child = self.handle_to_node[child_handle]
+        sibling = self.handle_to_node[sibling_handle]
+        child.parent = parent
+        sibling_index = parent.children.index(sibling)
+        parent.children.insert(sibling_index, child)
+        self.tab.render()
 
     def run(self, code):
         return self.interp.evaljs(code)
@@ -763,6 +804,10 @@ class JSContext:
             self.handle_to_node[handle] = elt
         else:
             handle = self.node_to_handle[elt]
+        if handle:
+            print('!dbg [PY get_handle] is NOT null')
+        else:
+            print('!dbg [PY get_handle] is null')
         return handle
 
     def getAttribute(self, handle, attr):
