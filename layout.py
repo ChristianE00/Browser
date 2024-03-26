@@ -4,6 +4,7 @@ from draw import DrawText, DrawRect, DrawLine, Rect, DrawOutline
 from Text import Text
 from Element import Element
 
+
 class LineLayout:
 
     def __init__(self, node, parent, previous):
@@ -37,6 +38,7 @@ class LineLayout:
 
         for word in self.children:
             word.layout()
+
         if not self.children:
             self.height = 0
             return
@@ -112,6 +114,7 @@ class TextLayout:
     def post_y_layout(self):
         return
 
+
 INPUT_WIDTH_PX = 200
 class InputLayout:
 
@@ -152,8 +155,6 @@ class InputLayout:
 
         
         if self.type == 'checkbox':
-           # rect = DrawOutline(self.self_rect(), 'black', thickness=1)
-          #  cmds.append(rect)
             if 'checked' in self.node.attributes:
                 rect = DrawRect(self.self_rect().inset(3), 'red')
                 cmds.append(rect)
@@ -206,11 +207,6 @@ class InputLayout:
             child.layout()
 
 
-
-
-
-
-
 class BlockLayout:
 
     def __init__(self, node, parent, previous):
@@ -235,7 +231,7 @@ class BlockLayout:
         if bgcolor != "transparent":
             rect = DrawRect(self.self_rect(), bgcolor)
             cmds.append(rect)
-        return cmds  # NOTE: might be a bug
+        return cmds      
     
     def should_paint(self):
         return isinstance(self.node, Text) or \
@@ -257,7 +253,6 @@ class BlockLayout:
         self.superscript = False
         self.abbr = False
 
-        # NOTE: don't need to init. display_list, cursor_y, or line fields
         if self.previous:
             self.y = self.previous.y + self.previous.height
         else:
@@ -306,7 +301,7 @@ class BlockLayout:
     def flush(self, center=False):
         if not self.line:
             return
-        # NOTE: Might need to change x calculation
+        
         max_ascent = max([font.metrics("ascent")
                          for x, word, font, s, color in self.line])
         baseline = self.cursor_y + 1.25 * max_ascent
@@ -322,7 +317,7 @@ class BlockLayout:
 
         max_descent = max([font.metrics("descent")
                           for x, word, font, s, color in self.line])
-        # NOTE: might need to be replaced
+
         self.height_of_firstline = (1.25 * max_descent) + (1.25 * max_ascent)
         self.cursor_y = baseline + 1.25 * max_descent
         self.cursor_x = 0
@@ -336,14 +331,11 @@ class BlockLayout:
         self.children.append(new_line)
 
     def word(self, node, word):
-        # NOTE fix what 'w' is
         weight = node.style["font-weight"]
-        style = node.style["font-style"]
+        # NOTE: This might be a bug 
+        style = 'roman' if (style := node.style["font-style"]) == 'normal' else style
         family = node.style["font-family"]
-        if style == "normal":
-            style = "roman"
         size = int(float(node.style["font-size"][:-2]) * .75)
-
         font = get_font(size, weight, style, family)
         w = font.measure(word)
 
@@ -367,8 +359,7 @@ class BlockLayout:
 
         family = node.style["font-family"]
         weight = node.style["font-weight"]
-        style = node.style["font-style"]
-        if style == "normal": style = "roman"
+        style = 'roman' if (style := node.style["font-style"]) == 'normal' else style
         size = int(float(node.style["font-size"][:-2]) * .75)
         font = get_font(size, weight, style, family)
 

@@ -38,7 +38,6 @@ INHERITED_PROPERTIES = {
     "color": "black",
 }
 RUNTIME_JS = open('runtime.js').read()
-counter = 0
 
 
 def print_tree(node, indent=0):
@@ -280,14 +279,6 @@ class URL:
             self.host, url = url.split("/", 1)
             self.path = url
             self.path = "/" + self.path
-            '''
-            elif "file" not in self.scheme:
-                self.host = url
-                url = ""
-
-            if "/" in url:
-                self.host, url = url.split("/", 1)
-            '''
 
             assert self.scheme in ["http", "https", "file", "about"]
 
@@ -316,7 +307,6 @@ class URL:
 
     def __repr__(self):
         fragment_part = "" if self.fragment == None else ", fragment=" + self.fragment
-        # return f"URL(scheme={self.scheme}, host={self.host}, port={self.port}, path='{self.path}')"
         return "URL(scheme={}, host={}, port={}, path={!r}{})".format(
             self.scheme, self.host, self.port, self.path, fragment_part)
 
@@ -347,8 +337,7 @@ class URL:
         for key in remove_list:
             del headers[key]
 
-        headers_text = "\r\n".join("{}: {}".format(k, v)
-                                   for k, v in headers.items())
+        headers_text = "\r\n".join("{}: {}".format(k, v))
         headers_text = "\r\n" + user_agent + connection + headers_text
         base_headers = (
             "GET {} HTTP/1.1\r\n".format(self.path)
@@ -473,8 +462,6 @@ class URL:
 
     
     def request(self, payload=None, method=None):
-        global counter
-        counter += 1
         if method == None:
             method = 'POST' if payload else 'GET'
         s = socket.socket(
@@ -490,19 +477,15 @@ class URL:
         elif self.scheme == "data":
             return self.handle_data_scheme() 
 
-        '''
         elif self.scheme == "about":
             http_body = "<!doctype html>"
             for bookmark in browser.bookmarks:
                 http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
             return http_body
-        '''
         
-#        method = "POST" if payload else "GET"
         query = ''
         if method == 'GET' and payload:
             query = '?' + payload
-            
         
         body = "{} {}{} HTTP/1.0\r\n".format(method, self.path, query)
         if payload:
@@ -511,12 +494,12 @@ class URL:
         body += "Host: {}\r\n".format(self.host)
         body += "\r\n" + (payload if payload else "")
         s.send(body.encode("utf8"))
+
         response = s.makefile("r", encoding="utf8", newline="\r\n")
-    
         statusline = response.readline()
         version, status, explanation = statusline.split(" ", 2)
-    
         response_headers = {}
+
         while True:
             line = response.readline()
             if line == "\r\n": break
@@ -525,7 +508,6 @@ class URL:
     
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
-    
         body = response.read()
         s.close()
         return body
