@@ -8,6 +8,7 @@ import tkinter.font
 import unicodedata
 import urllib
 import urllib.parse
+import dukpy
 from typing import Dict, Optional
 from CSSParser import CSSParser
 from classselector import ClassSelector
@@ -16,7 +17,7 @@ from Element import Element
 from HTMLParser import HTMLParser
 from layout import LineLayout, TextLayout, InputLayout, DocumentLayout, INPUT_WIDTH_PX
 from draw import DrawRect, DrawText, Rect, DrawLine, DrawOutline
-from helpers import get_font, FONTS, WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP
+from helpers import get_font, FONTS, WIDTH, HEIGHT, HSTEP, VSTEP, C, SCROLL_STEP, ENTRIES
 GRINNING_FACE_IMAGE = None
 EMOJIS = {}
 '''
@@ -36,6 +37,7 @@ INHERITED_PROPERTIES = {
     "font-family": "Times",
     "color": "black",
 }
+RUNTIME_JS = open('runtime.js').read()
 counter = 0
 
 
@@ -639,73 +641,8 @@ class URL:
             response_headers[header.casefold()] = value.strip()
         return response_headers
 
-    """
-    def request(self, browser, payload=None, headers: Optional[Dict[str, str]] =None, visited_urls=None):
-        '''Handles getting the page source from the server or local file.'''
-        method = 'POST' if payload else 'GET'
-        body = "{} {} HTTP/1.0\r\n".format(method, self.path)
-
-        if self.scheme == "file":
-            return self.handle_local_file()
-        elif self.scheme == "data":
-            return self.handle_data_scheme()
-        elif self.scheme == "https" or self.scheme == "http":
-            url = self.scheme.strip() + "://" + self.host.strip() + self.path.strip()
-
-            # Check if url is in cache, use cached response if it is
-            cached_headers, cached_body, cached_time, max_age = self.get_from_cache(
-                url)
-            if cached_body:
-                return cached_body
-
-            s = self.create_socket()
-            self.send_request(s, headers)
-            response, status = self.read_response(s)
-
-            # Other request code
-            if visited_urls is not None:
-                self.visited_urls = visited_urls
-            self.visited_urls.add(url)
-
-            # Handle redirect
-            if int(status) >= 300 and int(status) < 400:
-                return self.handle_redirect(response)
-
-            response_headers = self.read_headers(response)
-            assert "transfer-encoding" not in response_headers
-            assert "content-encoding" not in response_headers
-
-            '''
-            encoding_response = response_headers.get("content-type", "utf8")
-            encoding_position = encoding_response.find("charset=")
-            encoding = (
-                encoding_response[encoding_position + 8:]
-                if encoding_position != -1
-                else "utf8"
-            )
-            '''
-
-            # check if response is cacheable and cache it if it is
-            if "cache-control" in response_headers:
-                cache_response = response_headers["cache-control"].strip()
-                if "max-age" in cache_response:
-                    max_age = cache_response.split("=")[1]
-                    if int(max_age) > 0:
-                        body = response.read()
-                        s.close()
-                        self.cache_response(url, response_headers, body)
-                        return body
-
-            body = response.read()
-            s.close()
-            return body
-        elif self.scheme == "about":
-            http_body = "<!doctype html>"
-            for bookmark in browser.bookmarks:
-                http_body += f'<a href="{bookmark}">{bookmark}</a><br>'
-            return http_body
-    """
     
+    """
     def request(self, payload=None, method=None):
         global counter
         counter += 1
@@ -763,7 +700,47 @@ class URL:
         body = response.read()
         s.close()
         return body
-        
+        """
+    
+    def request(self, payload=None):
+        s = socket.socket(
+            family=socket.AF_INET,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+        s.connect((self.host, self.port))
+    
+        if self.scheme == "https":
+            ctx = ssl.create_default_context()
+            s = ctx.wrap_socket(s, server_hostname=self.host)
+
+        method = "POST" if payload else "GET"
+        request = "{} {} HTTP/1.0\r\n".format(method, self.path)
+        if payload:
+            length = len(payload.encode("utf8"))
+            request += "Content-Length: {}\r\n".format(length)
+        request += "Host: {}\r\n".format(self.host)
+        request += "\r\n"
+        if payload: request += payload
+        s.send(request.encode("utf8"))
+        response = s.makefile("r", encoding="utf8", newline="\r\n")
+    
+        statusline = response.readline()
+        version, status, explanation = statusline.split(" ", 2)
+    
+        response_headers = {}
+        while True:
+            line = response.readline()
+            if line == "\r\n": break
+            header, value = line.split(":", 1)
+            response_headers[header.casefold()] = value.strip()
+    
+        assert "transfer-encoding" not in response_headers
+        assert "content-encoding" not in response_headers
+    
+        content = response.read()
+        s.close()
+        return content
 
 
 
@@ -818,6 +795,7 @@ class Chrome:
         self.focus == "address bar"
         self.address_bar = self.address_bar[:-1]  # remove last character
 
+    """
     def click(self, x, y):
         self.focus = None
         # Check if click is a new tab or an open tab
@@ -842,6 +820,34 @@ class Chrome:
                 if self.tab_rect(i).containsPoint(x, y):
                     self.browser.active_tab = tab
                     break
+        """
+    def click(self, x, y):
+        self.focus = None
+        y += self.scroll
+        objs = [obj for obj in tree_to_list(self.document, [])
+                if obj.x <= x < obj.x + obj.width
+                and obj.y <= y < obj.y + obj.height]
+        if not objs: return
+        elt = objs[-1].node
+        while elt:
+            if isinstance(elt, Text):
+                pass
+            elif elt.tag == "a" and "href" in elt.attributes:
+                url = self.url.resolve(elt.attributes["href"])
+                return self.load(url)
+            elif elt.tag == "input":
+                elt.attributes["value"] = ""
+                if self.focus:
+                    self.focus.is_focused = False
+                self.focus = elt
+                elt.is_focused = True
+                return self.render()
+            elif elt.tag == "button":
+                while elt:
+                    if elt.tag == "form" and "action" in elt.attributes:
+                        return self.submit_form(elt)
+                    elt = elt.parent
+            elt = elt.parent
 
     def keypress(self, char):
         if self.focus == "address bar":
@@ -935,8 +941,93 @@ class Chrome:
         self.focus = None
 
 
+'''
+EVENT_DISPATCH_JS = \
+    "new Node(dukpy.handle).dispatchEvent(dukpy.type)"
+'''
+
+
+EVENT_DISPATCH_JS = \
+    "new Node(dukpy.handle).dispatchEvent(new Event(dukpy.type))"
+
+
+def show_comments():
+    out += '<strong></strong>'
+    out += '<script src=/comment.js></script>'
+
+def add_entry(params):
+    if 'guest' in params and len(params['guest']) <= 100:
+        ENTRIES.append(params['guest'])
+    return show_comments()
+
+
+class JSContext:
+    def __init__(self, tab):
+        self.tab = tab
+        self.node_to_handle = {}
+        self.handle_to_node = {}
+        self.interp = dukpy.JSInterpreter()
+        self.interp.export_function('log', print)
+        self.interp.export_function('querySelectorAll', self.querySelectorAll)
+        self.interp.export_function("getAttribute",
+            self.getAttribute)
+        self.interp.evaljs(RUNTIME_JS)
+#        self.tab.render()
+
+
+    def run(self, code):
+        return self.interp.evaljs(code)
+
+    def querySelectorAll(self, selector_text):
+        selector = CSSParser(selector_text).selector()
+        nodes = [node for node
+                 in tree_to_list(self.tab.nodes, [])
+                 if selector.matches(node)]
+        return [self.get_handle(node) for node in nodes]
+
+    def get_handle(self, elt):
+        if elt not in self.node_to_handle:
+            handle = len(self.node_to_handle)
+            self.node_to_handle[elt] = handle
+            self.handle_to_node[handle] = elt
+        else:
+            handle = self.node_to_handle[elt]
+        return handle
+
+    def getAttribute(self, handle, attr):
+        elt = self.handle_to_node[handle]
+        attr = elt.attributes.get(attr, None)
+        return attr if attr else ''
+
+    def dispatch_event(self, type, elt):
+        handle = self.node_to_handle.get(elt, -1)
+       # self.interp.evaljs(EVENT_DISPATCH_JS, type=type, handle=handle)
+        
+        do_default = self.interp.evaljs(
+            EVENT_DISPATCH_JS, type=type, handle=handle)
+        return not do_default
+
+    '''
+    def innerHTML_set(self, handle, s):
+        doc = HTMLParser('<html><body>' + s + '</body></html>').parse() 
+        new_nodes = doc.children[0].children
+        elt = self.handle_to_node[handle]
+        elt.children = new_nodes
+
+        for child in elt.children:
+            child.parent = elt
+    '''
+    def innerHTML_set(self, handle, s):
+        doc = HTMLParser("<html><body>" + s + "</body></html>").parse()
+        new_nodes = doc.children[0].children
+        elt = self.handle_to_node[handle]
+        elt.children = new_nodes
+        for child in elt.children:
+            child.parent = elt
+        self.tab.render()
 
 class Tab:
+
     def __init__(self, tab_height, browser):
         self.scroll = 0
         self.tab_height = tab_height
@@ -984,6 +1075,7 @@ class Tab:
                 continue
             cmd.execute(self.scroll - offset, canvas)
 
+    """
     def click(self, x_pos, y_pos):
         x, y = x_pos, y_pos
         y += self.scroll
@@ -999,6 +1091,8 @@ class Tab:
                 pass
             
             elif elt.tag == 'button':
+                if self.js.dispatch_event('click', elt): return
+
                 # Find the form that it's in by walking up the tree
                 while elt:
                     if elt.tag == 'form' and 'action' in elt.attributes:
@@ -1006,9 +1100,10 @@ class Tab:
                     elt = elt.parent
 
             elif elt.tag == 'input':
+                if self.js.dispatch_event('click', elt): return
+
                 elt.attributes['value'] = ''
 
-                # --------------CHEKBOXES----------------
                 if elt.attributes.get('type', 'text') == 'checkbox':
                     if 'checked' in elt.attributes:
                         del elt.attributes['checked']
@@ -1022,11 +1117,41 @@ class Tab:
                 return self.render()
 
             elif elt.tag == 'a' and 'href' in elt.attributes:
+                if self.js.dispatch_event('click', elt): return
+
                 if elt.attributes.get("href")[1:] == '#':
                     return self.scroll_to(elt.attributes.get("href")[1:])
                 else:
                     url = self.url.resolve(elt.attributes['href'])
                     return self.load(url)
+            elt = elt.parent
+            """
+    def click(self, x, y):
+        self.focus = None
+        y += self.scroll
+        objs = [obj for obj in tree_to_list(self.document, [])
+                if obj.x <= x < obj.x + obj.width
+                and obj.y <= y < obj.y + obj.height]
+        if not objs: return
+        elt = objs[-1].node
+        while elt:
+            if isinstance(elt, Text):
+                pass
+            elif elt.tag == "a" and "href" in elt.attributes:
+                url = self.url.resolve(elt.attributes["href"])
+                return self.load(url)
+            elif elt.tag == "input":
+                elt.attributes["value"] = ""
+                if self.focus:
+                    self.focus.is_focused = False
+                self.focus = elt
+                elt.is_focused = True
+                return self.render()
+            elif elt.tag == "button":
+                while elt:
+                    if elt.tag == "form" and "action" in elt.attributes:
+                        return self.submit_form(elt)
+                    elt = elt.parent
             elt = elt.parent
 
     def scrolldown(self, delta):
@@ -1069,12 +1194,13 @@ class Tab:
             if (isinstance(obj.node, Element) and obj.node.attributes.get("id") == fragment):
                 self.scroll = obj.y
 
+    '''
     def load(self, url, payload=None, method='GET', view_source: Optional[bool]=False):
         """Load the given URL and convert text tags to character tags."""
         # Note: Test for testing extra headers
-        body = url.request(payload, method=method)
         self.url = url
         self.history.append(url)
+        body = url.request(payload, method=method)
 
         if view_source:
             print(body)
@@ -1090,6 +1216,22 @@ class Tab:
                      and node.tag == "link"
                      and node.attributes.get("rel") == "stylesheet"
                      and "href" in node.attributes]
+
+            scripts = [node.attributes['src'] for node \
+                    in tree_to_list(self.nodes, [])
+                    if isinstance(node, Element)
+                    and node.tag == 'script'
+                    and 'src' in node.attributes]
+
+            self.js = JSContext(self)
+            for script in scripts:
+                body = url.resolve(script).request()
+                print('Script returned: ', dukpy.evaljs(body))
+                try: 
+                    self.js.run(body)
+                except dukpy.JSRuntimeError as e:
+                    print('Script', script, 'crashed', e)
+
             self.document = DocumentLayout(self.nodes)
             rules = DEFAULT_STYLE_SHEET.copy()
 
@@ -1109,6 +1251,47 @@ class Tab:
             self.display_list = []
             paint_tree(self.document, self.display_list)
         self.render()
+    '''
+    def load(self, url, payload=None):
+        self.scroll = 0
+        self.url = url
+        self.history.append(url)
+        print('before request')
+        body = url.request(payload)
+        print('after request')
+        self.nodes = HTMLParser(body).parse()
+
+        self.js = JSContext(self)
+        scripts = [node.attributes["src"] for node
+                   in tree_to_list(self.nodes, [])
+                   if isinstance(node, Element)
+                   and node.tag == "script"
+                   and "src" in node.attributes]
+        for script in scripts:
+            print('found scripts')
+            body = url.resolve(script).request()
+            try:
+                self.js.run(body)
+            except dukpy.JSRuntimeError as e:
+                print("Script", script, "crashed", e)
+        print('finished searching for scripts')
+
+        DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
+        self.rules = DEFAULT_STYLE_SHEET.copy()
+        links = [node.attributes["href"]
+                 for node in tree_to_list(self.nodes, [])
+                 if isinstance(node, Element)
+                 and node.tag == "link"
+                 and node.attributes.get("rel") == "stylesheet"
+                 and "href" in node.attributes]
+        for link in links:
+            try:
+                body = url.resolve(link).request()
+            except:
+                continue
+            self.rules.extend(CSSParser(body).parse())
+        self.render()
+
 
     def render(self):
         style(self.nodes, sorted(self.rules, key=cascade_priority))
@@ -1119,11 +1302,14 @@ class Tab:
 
     def keypress(self, char):
         if self.focus:
+            if self.js.dispatch_event('keydown', self.focus): return
             self.focus.attributes["value"] += char
             self.render()
 
     def submit_form(self, elt):
         """In charge of finding all input elements, encoding them, and sending the post request """
+        if self.js.dispatch_event('submit', elt): return
+
         inputs = [node for node in tree_to_list(elt, [])
                   if isinstance(node, Element)
                   and node.tag == "input"
