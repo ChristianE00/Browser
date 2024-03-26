@@ -642,7 +642,6 @@ class URL:
         return response_headers
 
     
-    """
     def request(self, payload=None, method=None):
         global counter
         counter += 1
@@ -700,8 +699,7 @@ class URL:
         body = response.read()
         s.close()
         return body
-        """
-    
+    """ 
     def request(self, payload=None):
         s = socket.socket(
             family=socket.AF_INET,
@@ -741,7 +739,7 @@ class URL:
         content = response.read()
         s.close()
         return content
-
+        """
 
 
 
@@ -971,6 +969,7 @@ class JSContext:
         self.interp.export_function('querySelectorAll', self.querySelectorAll)
         self.interp.export_function("getAttribute",
             self.getAttribute)
+        self.interp.export_function("innerHTML_set", self.innerHTML_set)
         self.interp.evaljs(RUNTIME_JS)
 #        self.tab.render()
 
@@ -1075,7 +1074,6 @@ class Tab:
                 continue
             cmd.execute(self.scroll - offset, canvas)
 
-    """
     def click(self, x_pos, y_pos):
         x, y = x_pos, y_pos
         y += self.scroll
@@ -1125,7 +1123,7 @@ class Tab:
                     url = self.url.resolve(elt.attributes['href'])
                     return self.load(url)
             elt = elt.parent
-            """
+    """
     def click(self, x, y):
         self.focus = None
         y += self.scroll
@@ -1153,7 +1151,7 @@ class Tab:
                         return self.submit_form(elt)
                     elt = elt.parent
             elt = elt.parent
-
+        """
     def scrolldown(self, delta):
         """Scroll down by SCROLL_STEP pixels."""
         # Default for Windows and Linux, divide by 120 for MacOS omegalul a single ternary
@@ -1256,9 +1254,7 @@ class Tab:
         self.scroll = 0
         self.url = url
         self.history.append(url)
-        print('before request')
         body = url.request(payload)
-        print('after request')
         self.nodes = HTMLParser(body).parse()
 
         self.js = JSContext(self)
@@ -1268,13 +1264,11 @@ class Tab:
                    and node.tag == "script"
                    and "src" in node.attributes]
         for script in scripts:
-            print('found scripts')
             body = url.resolve(script).request()
             try:
                 self.js.run(body)
             except dukpy.JSRuntimeError as e:
                 print("Script", script, "crashed", e)
-        print('finished searching for scripts')
 
         DEFAULT_STYLE_SHEET = CSSParser(open("browser.css").read()).parse()
         self.rules = DEFAULT_STYLE_SHEET.copy()
@@ -1339,8 +1333,7 @@ if __name__ == "__main__":
     '''
     body = URL(sys.argv[1]).request()
     nodes = HTMLParser(body).parse()
-    print_tree(nodes)
-    '''
     # Browser().load(URL(sys.argv[1]))
     Browser().new_tab(URL(sys.argv[1]))
     tkinter.mainloop()
+    '''
