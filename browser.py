@@ -732,7 +732,9 @@ def add_entry(params):
 
 
 class JSContext:
-    def __init__(self, tab):
+    def __init__(self, tab, id_list):
+        self.id_list = id_list
+        
         self.tab = tab
         self.node_to_handle = {}
         self.handle_to_node = {}
@@ -748,8 +750,18 @@ class JSContext:
         self.interp.export_function("insertBefore", self.insertBefore)
 
         self.interp.export_function("getChildren", self.getChildren)
-
         self.interp.evaljs(RUNTIME_JS)
+        self.create_id_nodes()
+
+    def create_id_nodes(self):
+        for node in self.id_list:
+            javascript_string = '{} = new Node({})'.format(node.attributes['id'], self.get_handle(node))
+            self.interp.evaljs(javascript_string)
+        
+    def remove_id_node(self, node):
+        self.id_list.remove(node)
+        javascript_string = 'delete {}'.format(node.attributes['id'])
+        self.interp.evaljs(javascript_string)
 
     def getChildren(self, handle):
         elt = self.handle_to_node[handle]
@@ -781,10 +793,13 @@ class JSContext:
         print("!dbg ENTERED insertBefore")
         parent = self.handle_to_node[parent_handle]
         child = self.handle_to_node[child_handle]
-        sibling = self.handle_to_node[sibling_handle]
         child.parent = parent
-        sibling_index = parent.children.index(sibling)
-        parent.children.insert(sibling_index, child)
+        if sibling_handle is None:
+            parent.children.append(child)
+        else:
+            sibling = self.handle_to_node[sibling_handle]
+            sibling_index = parent.children.index(sibling)
+            parent.children.insert(sibling_index, child)
         self.tab.render()
 
     def run(self, code):
@@ -798,6 +813,10 @@ class JSContext:
         return [self.get_handle(node) for node in nodes]
 
     def get_handle(self, elt):
+        if elt:
+            print('!dbg [PY get_handle] elt is NOT null')
+        else:
+            print('!dbg [PY get_handle] elt is null') 
         if elt not in self.node_to_handle:
             handle = len(self.node_to_handle)
             self.node_to_handle[elt] = handle
@@ -805,9 +824,9 @@ class JSContext:
         else:
             handle = self.node_to_handle[elt]
         if handle:
-            print('!dbg [PY get_handle] is NOT null')
+            print('!dbg [PY get_handle] handle is NOT null')
         else:
-            print('!dbg [PY get_handle] is null')
+            print('!dbg [PY get_handle] handle is null')
         return handle
 
     def getAttribute(self, handle, attr):
@@ -837,10 +856,23 @@ class JSContext:
         doc = HTMLParser("<html><body>" + s + "</body></html>").parse()
         new_nodes = doc.children[0].children
         elt = self.handle_to_node[handle]
+
+        for child in tree_to_list(elt, []):
+            if isinstance(child, Element):
+                if 'id' in child.attributes:
+                    self.remove_id_node(child)
+        
         elt.children = new_nodes
+
+        for child in tree_to_list(elt, []):
+            if isinstance(child, Element):
+                if 'id' in child.attributes:
+                    self.id_list.append(child)
+
         for child in elt.children:
             child.parent = elt
         self.tab.render()
+        self.create_id_nodes()
 
 class Tab:
 
@@ -1074,12 +1106,23 @@ class Tab:
         body = url.request(payload)
         self.nodes = HTMLParser(body).parse()
 
-        self.js = JSContext(self)
+        id_list = []
+        for node in tree_to_list(self.nodes, []):
+            if isinstance(node, Element):
+                if 'id' in node.attributes:
+                    id_list.append(node)
+
+
+        #self.js = JSContext(self)
+        
         scripts = [node.attributes["src"] for node
                    in tree_to_list(self.nodes, [])
                    if isinstance(node, Element)
                    and node.tag == "script"
                    and "src" in node.attributes]
+        
+        self.js = JSContext(self, id_list)
+
         for script in scripts:
             body = url.resolve(script).request()
             try:

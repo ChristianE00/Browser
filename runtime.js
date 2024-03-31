@@ -1,3 +1,6 @@
+
+// Used to lookup handles and event types
+LISTENERS = {}
 console = { log: function(x) { call_python("log", x); } }
 
 document = { 
@@ -52,8 +55,7 @@ Event.prototype.preventDefault = function() {
 
 // ---NODE
 
-// Used to lookup handles and event types
-LISTENERS = {}
+
 
 function Node(handle) { this.handle = handle; }
 
@@ -63,9 +65,9 @@ Node.prototype.getAttribute = function(attr) {
 }
 
 Node.prototype.appendChild = function(child){
-  console.log("!dbg BEFORE appendChild");
+  console.log(" BEFORE appendChild");
   if (child && child.handle){
-    console.log('!dbg[appendChild]: child is NOT null.');
+    console.log('![appendChild]: child is NOT null.');
     call_python('appendChild', this.handle, child.handle);
   }
   else{
