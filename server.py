@@ -118,7 +118,7 @@ def handle_connection(conx):
         len(body.encode("utf8")))
     if 'cookie' not in headers:
         template = 'Set-Cookie: token={}\r\n'
-        response += template.formate(token)
+        response += template.format(token)
     response += "\r\n" + body
     conx.send(response.encode('utf8'))
     conx.close()
