@@ -10,7 +10,12 @@ BLOCK_ELEMENTS = [
     "figcaption", "main", "div", "table", "form", "fieldset",
     "legend", "details", "summary"
 ]
-ENTRIES = [ 'Pavel was here' ]
+ENTRIES = [
+    ("no names. we are nameless!", "cerealkiller"),
+    ("HACK THE PLANET!!!", "crashoverride"),
+]
+
+
 
 
 def get_font(size, weight, slant, family):
