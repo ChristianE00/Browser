@@ -38,6 +38,7 @@ INHERITED_PROPERTIES = {
     "color": "black",
 }
 RUNTIME_JS = open('runtime.js').read()
+COOKIE_JAR = {}
 
 
 def print_tree(node, indent=0):
@@ -469,6 +470,8 @@ class URL:
             type=socket.SOCK_STREAM,
             proto=socket.IPPROTO_TCP,
         )
+        
+
         s.connect((self.host, self.port))
     
         if self.scheme == "https":
@@ -487,11 +490,16 @@ class URL:
         if method == 'GET' and payload:
             query = '?' + payload
         
+        
+
         body = "{} {}{} HTTP/1.0\r\n".format(method, self.path, query)
         if payload:
             length = len(payload.encode("utf8"))
             body += "Content-Length: {}\r\n".format(length)
         body += "Host: {}\r\n".format(self.host)
+        if self.host in COOKIE_JAR:
+            cookie = COOKIE_JAR[self.host]
+            body += 'Cookie: {}\r\n'.format(cookie)
         body += "\r\n" + (payload if payload else "")
         s.send(body.encode("utf8"))
 
@@ -505,6 +513,10 @@ class URL:
             if line == "\r\n": break
             header, value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
+        
+        if 'set-cookie' in response_headers:
+            cookie = response_headers['set-cookie']
+            COOKIE_JAR[self.host] = cookie
     
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
@@ -1099,7 +1111,7 @@ class Tab:
             paint_tree(self.document, self.display_list)
         self.render()
     '''
-    def load(self, url, payload=None):
+    def load(self, url, payload=None, method='GET'):
         self.scroll = 0
         self.url = url
         self.history.append(url)
@@ -1190,10 +1202,8 @@ class Tab:
 
 if __name__ == "__main__":
     import sys
-    '''
     body = URL(sys.argv[1]).request()
     nodes = HTMLParser(body).parse()
     # Browser().load(URL(sys.argv[1]))
     Browser().new_tab(URL(sys.argv[1]))
     tkinter.mainloop()
-    '''
