@@ -322,6 +322,9 @@ class URL:
         else:
             return self.scheme + "://" + self.host + port_part + self.path
 
+    def origin(self):
+        return self.scheme + '://' + self.host + ':' + str(self.port)
+
     def format_headers(self, headers):
         """Format the given header dictionary into a string."""
         user_agent = "User-Agent: SquidWeb\r\n"
@@ -462,7 +465,7 @@ class URL:
         return response_headers
 
     
-    def request(self, payload=None, method=None):
+    def request(self, top_level_url, payload=None, method=None):
         if method == None:
             method = 'POST' if payload else 'GET'
         s = socket.socket(
@@ -497,9 +500,15 @@ class URL:
             length = len(payload.encode("utf8"))
             body += "Content-Length: {}\r\n".format(length)
         body += "Host: {}\r\n".format(self.host)
+        # NOTE: NEW
         if self.host in COOKIE_JAR:
-            cookie = COOKIE_JAR[self.host]
-            body += 'Cookie: {}\r\n'.format(cookie)
+            cookie, params = COOKIE_JAR[self.host]
+            allow_cookie = True
+            if top_level_url and params.get('samesite', 'none') == 'lax':
+                if method != 'GET':
+                    allow_cookie = self.host == top_level_url.host
+            if allow_cookie:
+                body += 'Cookie: {}\r\n'.format(cookie)
         body += "\r\n" + (payload if payload else "")
         s.send(body.encode("utf8"))
 
@@ -516,13 +525,22 @@ class URL:
         
         if 'set-cookie' in response_headers:
             cookie = response_headers['set-cookie']
-            COOKIE_JAR[self.host] = cookie
+            params = {}
+            if ';' in cookie:
+                cookie, rest = cookie.split(';', 1)
+                for param in rest.split(';'):
+                    if '=' in param:
+                        param, value = param.split('=', 1)
+                    else:
+                        value = 'true'
+                    params[param.strip().casefold()] = value.casefold()
+            COOKIE_JAR[self.host] = (cookie, params)
     
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
         body = response.read()
         s.close()
-        return body
+        return response_headers, body
  
 
 
@@ -761,9 +779,22 @@ class JSContext:
         self.interp.export_function("appendChild", self.appendChild)
         self.interp.export_function("insertBefore", self.insertBefore)
 
+        self.interp.export_function("XMLHttpRequest_send", self.XMLHttpRequest_send)
+
         self.interp.export_function("getChildren", self.getChildren)
         self.interp.evaljs(RUNTIME_JS)
         self.create_id_nodes()
+
+    # NOTE; new code
+    def XMLHttpRequest_send(self, method, url, body):
+        """ Just call Request """
+        full_url = self.tab.url.resolve(url)
+        if not self.tab.allowed_request(full_url):
+            raise Exception('Cross-origin XHR request blocked by CSP') 
+        if full_url.origin() != self.tab.url.origin():
+            raise Exception('Cross-origin XHR request not allowed')
+        headers, out = full_url.request(self.tab.url, body)
+        return out
 
     def create_id_nodes(self):
         for node in self.id_list:
@@ -897,6 +928,10 @@ class Tab:
 
     def __repr__(self):
         return "Tab(history={})".format(self.history)
+
+    def allowed_request(self, url):
+        return self.allowed_origins == None or \
+        url.origin() in self.allowed_origins
 
     def enter(self):
         if self.focus:
@@ -1115,7 +1150,15 @@ class Tab:
         self.scroll = 0
         self.url = url
         self.history.append(url)
-        body = url.request(payload)
+        # NOTE: new
+        headers, body = url.request(self.url, payload)
+        self.allowed_origins = None
+        if 'content-security-policy' in headers:
+            csp = headers['content-security-policy'].split()
+            if len(csp) > 0 and csp[0] == 'default-src':
+                self.allowed_origins = []
+                for origin in csp[1:]:
+                    self.allowed_origins.append(URL(origin).origin())
         self.nodes = HTMLParser(body).parse()
 
         id_list = []
@@ -1136,7 +1179,13 @@ class Tab:
         self.js = JSContext(self, id_list)
 
         for script in scripts:
-            body = url.resolve(script).request()
+            #body = url.resolve(script).request()
+            # NOTE: new
+            script_url = url.resolve(script)
+            if not self.allowed_request(script_url):
+                print('Blocked script', script, 'due to CSP')
+                continue
+            header, body = script_url.request(url)
             try:
                 self.js.run(body)
             except dukpy.JSRuntimeError as e:
@@ -1151,8 +1200,14 @@ class Tab:
                  and node.attributes.get("rel") == "stylesheet"
                  and "href" in node.attributes]
         for link in links:
+            script_url = url.resolve(link)
+            if not self.allowed_request(script_url):
+                print('Blocked style', link, 'due to CSP')
+                continue
+            
             try:
-                body = url.resolve(link).request()
+                #body = url.resolve(link).request()
+                header, body = script_url.request(url)
             except:
                 continue
             self.rules.extend(CSSParser(body).parse())

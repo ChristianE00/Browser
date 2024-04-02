@@ -1,6 +1,7 @@
 import socket 
 import urllib
 import random
+import html
 from urllib import parse
 from helpers import ENTRIES
 
@@ -16,6 +17,8 @@ def not_found(url, method):
     return out
 
 def add_entry(session, params):
+    if 'nonce' not in session or 'nonce' not in params: return
+    if session['nonce'] != params['nonce']: return
     if 'user' not in session: return
     if 'guest' in params and len(params['guest']) <= 100:
         ENTRIES.append((params['guest'], session['user']))
@@ -34,18 +37,27 @@ def show_comments(session):
     out = "<!doctype html>"
     print('entered show_comments')
     if 'user' in session:
+        nonce = str(random.random())[2:]
+        session['nonce'] = nonce
+
         print('user found in session')
         out += '<h1>Hello, ' + session["user"] + '</h1>'
         out += "<form action=add method=post>"
         out +=   "<p><input name=guest></p>"
+        out +=   "<input name=nonce type=hidden value=" + nonce + ">"
         out +=   "<p><button>Sign the book!</button></p>"
         out += "</form>"
     else:
         print('user not found in session')
         out += '<a href=/login>Sign in to write in the guest book</a>'
     for entry, who in ENTRIES:
-        out += "<p>" + entry + "\n"
-        out += "<i>by " + who + "</i></p>"
+        out += "<p>" + html.escape(entry) + "\n"
+        out += "<i>by " + html.escape(who) + "</i></p>"
+
+#    out += '<link rel=stylesheet src=/comment.css>'
+#    out += '<label></label>'
+#    out += '<script src=/comment.js></script>'
+    out += '<script src=https://example.com/evil.js></script>'
     return out
 
 def login_form(session):
@@ -117,8 +129,10 @@ def handle_connection(conx):
     response += "Content-Length: {}\r\n".format(
         len(body.encode("utf8")))
     if 'cookie' not in headers:
-        template = 'Set-Cookie: token={}\r\n'
+        template = 'Set-Cookie: token={}; SameSite=Lax\r\n'
         response += template.format(token)
+    csp = 'default-src http://localhost:8000'    
+    response += 'Content-Security-Policy: {}\r\n'.format(csp)
     response += "\r\n" + body
     conx.send(response.encode('utf8'))
     conx.close()

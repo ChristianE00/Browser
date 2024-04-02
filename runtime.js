@@ -3,6 +3,26 @@
 LISTENERS = {}
 console = { log: function(x) { call_python("log", x); } }
 
+function XMLHttpRequest() {}
+
+
+// Save the method and URL
+XMLHttpRequest.prototype.open = function(method, url, is_async) {
+  if (is_async) throw Error("Asyncrhonous XHR is not supported");
+  this.method = method;
+  this.url = url;
+
+}
+
+
+// Calls an exported function
+XMLHttpRequest.prototype.send = function(body) {
+  this.responseText = call_python("XMLHttpRequest_send", this.method, this.url, body);
+}
+
+
+
+
 document = { 
 
   querySelectorAll: function(s) {
