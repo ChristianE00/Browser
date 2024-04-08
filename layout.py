@@ -149,10 +149,12 @@ class InputLayout:
     def paint(self):
         cmds = []
         bgcolor = self.node.style.get('background-color', 'transparent')
+        if self.type == 'hidden':
+            return cmds
+
         if bgcolor != 'transparent':
             rect = DrawRect(self.self_rect(), bgcolor)
             cmds.append(rect)
-
         
         if self.type == 'checkbox':
             if 'checked' in self.node.attributes:
@@ -160,7 +162,10 @@ class InputLayout:
                 cmds.append(rect)
 
         if self.node.tag == 'input':
-            text = self.node.attributes.get('value', '')
+            if self.node.attributes.get('type', 'text') == 'password':
+                text = '*' * len(self.node.attributes.get('value', ''))
+            else:
+                text = self.node.attributes.get('value', '')
 
         elif self.node.tag == 'button':
             if len(self.node.children) == 1 and isinstance(self.node.children[0], Text):
@@ -191,10 +196,15 @@ class InputLayout:
         self.font = get_font(size, weight, style, family)
         self.width = INPUT_WIDTH_PX
 
+        if self.node.tag == 'input' and self.type == 'hidden':
+            self.width = 0.0
+
         # 2: Calculate x and y position
         if self.previous:
             space = self.previous.font.measure(" ")
             self.x = self.previous.x + space + self.previous.width
+        elif self.type == 'hidden':
+            self.height = 0.0
         else:
             self.x = self.parent.x
         self.height = self.font.metrics("linespace")
