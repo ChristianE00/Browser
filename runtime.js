@@ -48,6 +48,15 @@ document = {
 
 // ---OBJECT
 
+Object.defineProperty(document, 'cookie', {
+  get: function (){
+    return call_python('get_cookies');
+  },
+  set: function (c) {
+    call_python('set_cookies', c.toString());
+  }
+});
+
 Object.defineProperty(Node.prototype, 'innerHTML', {
   set: function(s) {
     call_python("innerHTML_set", this.handle, s.toString());

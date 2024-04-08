@@ -522,7 +522,6 @@ class URL:
             if line == "\r\n": break
             header, value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
-        
         if 'set-cookie' in response_headers:
             cookie = response_headers['set-cookie']
             params = {}
@@ -781,9 +780,38 @@ class JSContext:
 
         self.interp.export_function("XMLHttpRequest_send", self.XMLHttpRequest_send)
 
+        self.interp.export_function('get_cookies', self.getCookies)
+        self.interp.export_function('set_cookies', self.setCookies)
+
         self.interp.export_function("getChildren", self.getChildren)
         self.interp.evaljs(RUNTIME_JS)
         self.create_id_nodes()
+
+    def getCookies(self):
+        cookies = COOKIE_JAR.get(self.tab.url.host, ('', {}))
+        if 'httponly' in cookies[1]:
+            return ''
+        return COOKIE_JAR.get(self.tab.url.host, ('', {}))[0]
+
+    def setCookies(self, cookie):
+        cookies = COOKIE_JAR.get(self.tab.url.host, ('', {}))
+        if 'httponly' in cookies[1]:
+            return ''
+        '''
+        if 'set-cookie' in cookies[1]:
+            print('entered setCookies')
+            cookie = cookies[1]['set-cookie']
+            params = {}
+            if ';' in cookie:
+                cookie, rest = cookie.split(';', 1)
+                for param in rest.split(';'):
+                    if '=' in param:
+                        param, value = param.split('=', 1)
+                    else:
+                        value = 'true'
+                    params[param.strip().casefold()] = value.casefold()
+            COOKIE_JAR[self.host] = (cookie, params)
+        '''
 
     # NOTE; new code
     def XMLHttpRequest_send(self, method, url, body):

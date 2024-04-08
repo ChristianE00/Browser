@@ -147,10 +147,11 @@ class InputLayout:
         return Rect(self.left - offset, self.right + offset, self.top + offset, self.bottom - offset)
 
     def paint(self):
-        cmds = []
-        bgcolor = self.node.style.get('background-color', 'transparent')
         if self.type == 'hidden':
             return cmds
+        cmds = []
+        bgcolor = self.node.style.get('background-color', 'transparent')
+        
 
         if bgcolor != 'transparent':
             rect = DrawRect(self.self_rect(), bgcolor)
@@ -203,12 +204,13 @@ class InputLayout:
         if self.previous:
             space = self.previous.font.measure(" ")
             self.x = self.previous.x + space + self.previous.width
-        elif self.type == 'hidden':
-            self.height = 0.0
         else:
             self.x = self.parent.x
+
         self.height = self.font.metrics("linespace")
 
+        if self.type == 'hidden':
+            self.height = 0.0
 
     def post_y_layout(self):
         if self.node.tag == 'button':
