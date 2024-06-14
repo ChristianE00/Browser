@@ -30,24 +30,24 @@ Work
 
 The main implementation of the web browser can be found in browser.py. The browser is modular, and you can find different parts of the implementation in separate files:
 
-- http.py: Handling HTTP requests and responses.
-- ui.py: User interface components.
-- layout.py: Layout engine for rendering HTML and CSS.
-- CSSParser.py: Parsing CSS files.
-- HTMLParser.py: Parsing HTML files.
-- Element.py: Handling HTML elements.
-- Text.py: Handling text nodes.
-- helpers.py: Utility functions.
-- classselector.py: Handling CSS class selectors.
-- DescendantSelector.py: Handling CSS descendant selectors.
-- TagSelector.py: Handling CSS tag selectors.
-- draw.py: Drawing graphics on the screen.
-- tab.py: Managing browser tabs.
-- server.py: Running a local web server for testing.
+- `http.py`: Handling HTTP requests and responses.
+- `ui.py`: User interface components.
+- `layout.py`: Layout engine for rendering HTML and CSS.
+- `CSSParser.py`: Parsing CSS files.
+- `HTMLParser.py`: Parsing HTML files.
+- `Element.py`: Handling HTML elements.
+- `Text.py`: Handling text nodes.
+- `helpers.py`: Utility functions.
+- `classselector.py`: Handling CSS class selectors.
+- `DescendantSelector.py`: Handling CSS descendant selectors.
+- `TagSelector.py`: Handling CSS tag selectors.
+- `draw.py`: Drawing graphics on the screen.
+- `tab.py`: Managing browser tabs.
+- `server.py`: Running a local web server for testing.
 
 ___Additional files include:___
 
-- .github: GitHub workflows and configurations.
+- `.github`: GitHub workflows and configurations.
 - `.idea`: IDE configurations.
 - `local_files`: Local files for testing.
 - `openmoji`: Emoji support.
