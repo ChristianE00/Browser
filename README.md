@@ -1,43 +1,74 @@
-Your CS 4560 Repository
+Web Browser Project
 =======================
 
-You'll be using this repository to do and submit homework assignments
-for CS 4560.
+This repository contains the code for my personal web browser project. The browser is built using Python, dukpy, and Tkinter, focusing on handling text-based web pages.
+
+
+Fetures
+-------
+
+- Rendering Engine: Custom rendering engine that handles HTML parsing, CSS parsing, layout, styling, and drawing text.
+- User Interface: Chrome-like interface with support for tabs, bookmarks, and search history.
+- JavaScript DOM API: Implemented a subset of the JavaScript DOM API for text-based interactions.
+- Security: Privacy and security features, including cookie and login management, XSS, and CSRF protection.
 
 Setup
 -----
 
-Clone this repository to your computer and then run the following
-command to also download the autograder:
 
-	git submodule update --init
+Clone this repository to your computer:
 
-If the autograder is ever updated, you can download the updates using:
+```bash
 
-	git submodule update --remote
+git clone https://github.com/yourusername/new-project.git
+cd new-project
 
-That will make changes to the `.gitmodules` file; those changes are
-safe to commit and push.
+```
 
 Work
 ----
 
-Implement your web browser in `browser.py`. If you'd like, feel free
-to split your browser into multiple files, as long as you import them
-into `browser.py`, like this:
+The main implementation of the web browser can be found in browser.py. The browser is modular, and you can find different parts of the implementation in separate files:
 
-	from http import *
-	from ui import *
-	from layout import *
-	...
+- http.py: Handling HTTP requests and responses.
+- ui.py: User interface components.
+- layout.py: Layout engine for rendering HTML and CSS.
+- CSSParser.py: Parsing CSS files.
+- HTMLParser.py: Parsing HTML files.
+- Element.py: Handling HTML elements.
+- Text.py: Handling text nodes.
+- helpers.py: Utility functions.
+- classselector.py: Handling CSS class selectors.
+- DescendantSelector.py: Handling CSS descendant selectors.
+- TagSelector.py: Handling CSS tag selectors.
+- draw.py: Drawing graphics on the screen.
+- tab.py: Managing browser tabs.
+- server.py: Running a local web server for testing.
 
-Autograder
-----------
+___Additional files include:___
 
-Every time you push, the autograder will run. You can see the results
-by clicking the Actions tab at the top of this page. If you click on
-one of the runs on Actions page, you'll see a grade summary at the
-bottom of the page.
+- .github: GitHub workflows and configurations.
+- `.idea`: IDE configurations.
+- `local_files`: Local files for testing.
+- `openmoji`: Emoji support.
+- `test`: Test cases.
+- `__pycache__`: Python cache files.
+- `.gitignore`: Git ignore file.
+- `.gitmodules `: Git submodules configuration.
+- `browser.css`: CSS file for the browser.
+- `comment.css`: CSS file for comments.
+- `comment.js`: JavaScript file for comments.
+- `output.txt`: Output file for logging.
+- `README.md`: This readme file.
+- `runtime.js`: JavaScript runtime file.
+- `test.js`: JavaScript test file.
 
-You can see more information about the autograder, and its test, in
-[that repository](https://github.com/cs4560-utah-sp24/test/tree/main).
+Running the Browser
+-------------------
+
+To run the browser, execture the following command:
+
+```bash 
+python browser.py
+```
+
